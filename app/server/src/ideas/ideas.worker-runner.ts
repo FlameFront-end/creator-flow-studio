@@ -1,16 +1,19 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Job } from 'bullmq';
-import { Worker } from 'bullmq';
+import { UnrecoverableError, Worker } from 'bullmq';
 import { Repository } from 'typeorm';
 import { PromptService } from '../prompt/prompt.service';
 import { PromptTemplateKey } from '../prompt-templates/entities/prompt-template.entity';
 import {
   GenerateCaptionJobData,
+  GenerateImageJobData,
   GenerateIdeasJobData,
   GenerateScriptJobData,
+  GenerateVideoJobData,
 } from './ai-queue.service';
 import { AiOperation, AiRunLog } from './entities/ai-run-log.entity';
+import { Asset } from './entities/asset.entity';
 import { Caption } from './entities/caption.entity';
 import { GenerationStatus } from './entities/generation-status.enum';
 import { Idea, IdeaFormat } from './entities/idea.entity';
@@ -28,6 +31,15 @@ import {
 } from './llm/llm-provider.interface';
 import type { LlmProvider } from './llm/llm-provider.interface';
 import { buildRedisConnection } from './redis.config';
+import {
+  IMAGE_PROVIDER_TOKEN,
+} from './providers/image-provider.interface';
+import type { ImageProvider } from './providers/image-provider.interface';
+import {
+  VIDEO_PROVIDER_TOKEN,
+} from './providers/video-provider.interface';
+import type { VideoProvider } from './providers/video-provider.interface';
+import { LocalObjectStorageService } from '../storage/local-object-storage.service';
 
 type IdeasResponse = {
   ideas?: Array<{
@@ -64,6 +76,11 @@ export class IdeasWorkerRunner implements OnModuleDestroy {
   constructor(
     @Inject(LLM_PROVIDER_TOKEN)
     private readonly llmProvider: LlmProvider,
+    @Inject(IMAGE_PROVIDER_TOKEN)
+    private readonly imageProvider: ImageProvider,
+    @Inject(VIDEO_PROVIDER_TOKEN)
+    private readonly videoProvider: VideoProvider,
+    private readonly objectStorageService: LocalObjectStorageService,
     private readonly promptService: PromptService,
     @InjectRepository(Idea)
     private readonly ideasRepository: Repository<Idea>,
@@ -73,6 +90,8 @@ export class IdeasWorkerRunner implements OnModuleDestroy {
     private readonly captionsRepository: Repository<Caption>,
     @InjectRepository(AiRunLog)
     private readonly logsRepository: Repository<AiRunLog>,
+    @InjectRepository(Asset)
+    private readonly assetsRepository: Repository<Asset>,
   ) {}
 
   start(): void {
@@ -92,6 +111,12 @@ export class IdeasWorkerRunner implements OnModuleDestroy {
             return;
           case AiJobName.GENERATE_CAPTION:
             await this.handleGenerateCaption(job as Job<GenerateCaptionJobData>);
+            return;
+          case AiJobName.GENERATE_IMAGE:
+            await this.handleGenerateImage(job as Job<GenerateImageJobData>);
+            return;
+          case AiJobName.GENERATE_VIDEO:
+            await this.handleGenerateVideo(job as Job<GenerateVideoJobData>);
             return;
           default:
             this.logger.warn(`Unknown job "${job.name}" skipped`);
@@ -178,18 +203,20 @@ Return JSON with shape:
         model: response.model,
       });
     } catch (error) {
-      await this.createLog({
-        operation: AiOperation.IDEAS,
-        projectId: job.data.projectId,
-        ideaId: null,
-        status: GenerationStatus.FAILED,
-        latencyMs: Date.now() - startedAt,
-        tokens: null,
-        requestId: null,
-        model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
-        error: this.toErrorMessage(error),
-      });
-      throw error;
+      if (this.shouldLogFailureForAttempt(job, error)) {
+        await this.createLog({
+          operation: AiOperation.IDEAS,
+          projectId: job.data.projectId,
+          ideaId: null,
+          status: GenerationStatus.FAILED,
+          latencyMs: Date.now() - startedAt,
+          tokens: null,
+          requestId: null,
+          model: this.getConfiguredLlmModel(),
+          error: this.toErrorMessage(error),
+        });
+      }
+      throw this.toQueueError(error);
     }
   }
 
@@ -262,18 +289,20 @@ Return JSON with shape:
       });
     } catch (error) {
       await this.failScript(script.id, this.toErrorMessage(error));
-      await this.createLog({
-        operation: AiOperation.SCRIPT,
-        projectId: idea.projectId,
-        ideaId: idea.id,
-        status: GenerationStatus.FAILED,
-        latencyMs: Date.now() - startedAt,
-        tokens: null,
-        requestId: null,
-        model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
-        error: this.toErrorMessage(error),
-      });
-      throw error;
+      if (this.shouldLogFailureForAttempt(job, error)) {
+        await this.createLog({
+          operation: AiOperation.SCRIPT,
+          projectId: idea.projectId,
+          ideaId: idea.id,
+          status: GenerationStatus.FAILED,
+          latencyMs: Date.now() - startedAt,
+          tokens: null,
+          requestId: null,
+          model: this.getConfiguredLlmModel(),
+          error: this.toErrorMessage(error),
+        });
+      }
+      throw this.toQueueError(error);
     }
   }
 
@@ -346,18 +375,172 @@ Return JSON with shape:
       });
     } catch (error) {
       await this.failCaption(caption.id, this.toErrorMessage(error));
+      if (this.shouldLogFailureForAttempt(job, error)) {
+        await this.createLog({
+          operation: AiOperation.CAPTION,
+          projectId: idea.projectId,
+          ideaId: idea.id,
+          status: GenerationStatus.FAILED,
+          latencyMs: Date.now() - startedAt,
+          tokens: null,
+          requestId: null,
+          model: this.getConfiguredLlmModel(),
+          error: this.toErrorMessage(error),
+        });
+      }
+      throw this.toQueueError(error);
+    }
+  }
+
+  private async handleGenerateImage(job: Job<GenerateImageJobData>) {
+    const startedAt = Date.now();
+    const asset = await this.assetsRepository.findOne({
+      where: { id: job.data.assetId },
+    });
+    if (!asset) {
+      throw new Error(`Asset "${job.data.assetId}" not found`);
+    }
+
+    await this.assetsRepository.update(asset.id, {
+      status: GenerationStatus.RUNNING,
+      error: null,
+    });
+
+    const idea = await this.ideasRepository.findOne({
+      where: { id: job.data.ideaId },
+    });
+    if (!idea) {
+      await this.failAsset(asset.id, 'Idea not found');
+      return;
+    }
+
+    try {
+      if (!idea.imagePrompt?.trim()) {
+        throw new Error('Image prompt is empty. Generate image prompt first.');
+      }
+      const generated = await this.imageProvider.generate({
+        prompt: idea.imagePrompt,
+        ideaId: idea.id,
+      });
+      const url = await this.objectStorageService.save({
+        bytes: generated.bytes,
+        mime: generated.mime,
+        ideaId: idea.id,
+      });
+
+      await this.assetsRepository.update(asset.id, {
+        status: GenerationStatus.SUCCEEDED,
+        error: null,
+        provider: this.imageProvider.name,
+        mime: generated.mime,
+        width: generated.width,
+        height: generated.height,
+        url,
+        sourcePrompt: idea.imagePrompt,
+      });
+
       await this.createLog({
-        operation: AiOperation.CAPTION,
+        operation: AiOperation.IMAGE,
+        provider: this.imageProvider.name,
         projectId: idea.projectId,
         ideaId: idea.id,
-        status: GenerationStatus.FAILED,
+        status: GenerationStatus.SUCCEEDED,
         latencyMs: Date.now() - startedAt,
         tokens: null,
         requestId: null,
-        model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
-        error: this.toErrorMessage(error),
+        model: 'mock-image-v1',
       });
-      throw error;
+    } catch (error) {
+      await this.failAsset(asset.id, this.toErrorMessage(error));
+      if (this.shouldLogFailureForAttempt(job, error)) {
+        await this.createLog({
+          operation: AiOperation.IMAGE,
+          provider: this.imageProvider.name,
+          projectId: idea.projectId,
+          ideaId: idea.id,
+          status: GenerationStatus.FAILED,
+          latencyMs: Date.now() - startedAt,
+          tokens: null,
+          requestId: null,
+          model: 'mock-image-v1',
+          error: this.toErrorMessage(error),
+        });
+      }
+      throw this.toQueueError(error);
+    }
+  }
+
+  private async handleGenerateVideo(job: Job<GenerateVideoJobData>) {
+    const startedAt = Date.now();
+    const asset = await this.assetsRepository.findOne({
+      where: { id: job.data.assetId },
+    });
+    if (!asset) {
+      throw new Error(`Asset "${job.data.assetId}" not found`);
+    }
+    const idea = await this.ideasRepository.findOne({
+      where: { id: job.data.ideaId },
+    });
+    if (!idea) {
+      await this.failAsset(asset.id, 'Idea not found');
+      return;
+    }
+
+    await this.assetsRepository.update(asset.id, {
+      status: GenerationStatus.RUNNING,
+      error: null,
+    });
+
+    try {
+      if (!idea.imagePrompt?.trim()) {
+        throw new Error('Image prompt is empty. Generate image prompt first.');
+      }
+
+      const generated = await this.videoProvider.generate({
+        prompt: idea.imagePrompt,
+        ideaId: idea.id,
+      });
+
+      await this.assetsRepository.update(asset.id, {
+        status: GenerationStatus.SUCCEEDED,
+        error: null,
+        provider: this.videoProvider.name,
+        mime: generated.mime,
+        width: generated.width,
+        height: generated.height,
+        duration: generated.duration,
+        url: generated.url,
+        sourcePrompt: idea.imagePrompt,
+      });
+
+      await this.createLog({
+        operation: AiOperation.VIDEO,
+        provider: this.videoProvider.name,
+        projectId: idea.projectId,
+        ideaId: idea.id,
+        status: GenerationStatus.SUCCEEDED,
+        latencyMs: Date.now() - startedAt,
+        tokens: null,
+        requestId: null,
+        model: 'mock-video-v1',
+      });
+    } catch (error) {
+      await this.failAsset(asset.id, this.toErrorMessage(error));
+      if (this.shouldLogFailureForAttempt(job, error)) {
+        await this.createLog({
+          operation: AiOperation.VIDEO,
+          provider: this.videoProvider.name,
+          projectId: idea.projectId,
+          ideaId: idea.id,
+          status: GenerationStatus.FAILED,
+          latencyMs: Date.now() - startedAt,
+          tokens: null,
+          requestId: null,
+          model: 'mock-video-v1',
+          error: this.toErrorMessage(error),
+        });
+      }
+      throw this.toQueueError(error);
     }
   }
 
@@ -438,8 +621,16 @@ Return JSON with shape:
     });
   }
 
+  private async failAsset(assetId: string, error: string) {
+    await this.assetsRepository.update(assetId, {
+      status: GenerationStatus.FAILED,
+      error: this.truncateError(error),
+    });
+  }
+
   private async createLog(params: {
     operation: AiOperation;
+    provider?: string;
     projectId: string | null;
     ideaId: string | null;
     status: GenerationStatus;
@@ -451,7 +642,7 @@ Return JSON with shape:
   }) {
     await this.logsRepository.save(
       this.logsRepository.create({
-        provider: this.llmProvider.name,
+        provider: params.provider ?? this.llmProvider.name,
         model: params.model,
         operation: params.operation,
         projectId: params.projectId,
@@ -473,6 +664,32 @@ Return JSON with shape:
     );
   }
 
+  private shouldLogFailureForAttempt(job: Job, error: unknown): boolean {
+    if (this.isUnrecoverableError(error)) {
+      return true;
+    }
+    const attempts = Number(job.opts.attempts ?? 1);
+    return job.attemptsMade + 1 >= attempts;
+  }
+
+  private toQueueError(error: unknown): Error {
+    if (this.isUnrecoverableError(error)) {
+      return new UnrecoverableError(this.toErrorMessage(error));
+    }
+    if (error instanceof Error) {
+      return error;
+    }
+    return new Error(this.toErrorMessage(error));
+  }
+
+  private isUnrecoverableError(error: unknown): boolean {
+    const message = this.toErrorMessage(error).toLowerCase();
+    return (
+      message.includes('is not configured for ai generation') ||
+      message.includes('prompt template') && message.includes('not found')
+    );  
+  }
+
   private toErrorMessage(error: unknown): string {
     if (error instanceof Error && error.message) {
       return error.message;
@@ -487,5 +704,14 @@ Return JSON with shape:
   private toNumber(value: string | undefined, fallback: number): number {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  private getConfiguredLlmModel(): string {
+    return (
+      process.env.LLM_MODEL ??
+      process.env.OPENROUTER_MODEL ??
+      process.env.OPENAI_MODEL ??
+      'unknown-model'
+    );
   }
 }

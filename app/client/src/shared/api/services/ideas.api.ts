@@ -2,7 +2,8 @@ import { axiosInstance } from '../axiosInstance'
 
 export type GenerationStatus = 'queued' | 'running' | 'succeeded' | 'failed'
 export type IdeaFormat = 'reel' | 'short' | 'tiktok'
-export type AiOperation = 'ideas' | 'script' | 'caption'
+export type AiOperation = 'ideas' | 'script' | 'caption' | 'image_prompt' | 'image' | 'video'
+export type AssetType = 'image' | 'video' | 'audio'
 
 export type Script = {
   id: string
@@ -34,13 +35,32 @@ export type Idea = {
   status: GenerationStatus
   error: string | null
   createdAt: string
+  imagePrompt: string | null
   latestScript: Script | null
   latestCaption: Caption | null
+  latestImage: Asset | null
 }
 
 export type IdeaDetails = Omit<Idea, 'latestScript' | 'latestCaption'> & {
   scripts: Script[]
   captions: Caption[]
+  assets: Asset[]
+}
+
+export type Asset = {
+  id: string
+  ideaId: string
+  type: AssetType
+  url: string | null
+  mime: string | null
+  width: number | null
+  height: number | null
+  duration: number | null
+  sourcePrompt: string | null
+  provider: string | null
+  status: GenerationStatus
+  error: string | null
+  createdAt: string
 }
 
 export type AiRunLog = {
@@ -87,6 +107,20 @@ export type GenerateCaptionResponse = {
   status: GenerationStatus
 }
 
+export type GenerateImagePromptResponse = {
+  prompt: string
+}
+
+export type GenerateImageResponse = {
+  jobId: string
+  assetId: string
+  status: GenerationStatus
+}
+
+export type ClearResponse = {
+  deleted: number
+}
+
 export const ideasApi = {
   async generateIdeas(payload: GenerateIdeasRequest): Promise<GenerateIdeasResponse> {
     const { data } = await axiosInstance.post<GenerateIdeasResponse>('/ideas/generate', payload)
@@ -106,6 +140,20 @@ export const ideasApi = {
     )
     return data
   },
+  async generateImagePrompt(ideaId: string): Promise<GenerateImagePromptResponse> {
+    const { data } = await axiosInstance.post<GenerateImagePromptResponse>(
+      `/ideas/${ideaId}/image-prompt/generate`,
+    )
+    return data
+  },
+  async generateImage(ideaId: string, payload: GenerateAssetRequest): Promise<GenerateImageResponse> {
+    const { data } = await axiosInstance.post<GenerateImageResponse>(`/ideas/${ideaId}/images/generate`, payload)
+    return data
+  },
+  async generateVideo(ideaId: string, payload: GenerateAssetRequest): Promise<GenerateImageResponse> {
+    const { data } = await axiosInstance.post<GenerateImageResponse>(`/ideas/${ideaId}/videos/generate`, payload)
+    return data
+  },
   async getIdeas(projectId: string): Promise<Idea[]> {
     const { data } = await axiosInstance.get<Idea[]>('/ideas', {
       params: { projectId },
@@ -122,5 +170,24 @@ export const ideasApi = {
     })
     return data
   },
+  async clearIdeas(projectId: string): Promise<ClearResponse> {
+    const { data } = await axiosInstance.delete<ClearResponse>('/ideas', {
+      params: { projectId },
+    })
+    return data
+  },
+  async clearLogs(projectId: string): Promise<ClearResponse> {
+    const { data } = await axiosInstance.delete<ClearResponse>('/ideas/logs', {
+      params: { projectId },
+    })
+    return data
+  },
+  async removeIdea(ideaId: string): Promise<ClearResponse> {
+    const { data } = await axiosInstance.delete<ClearResponse>(`/ideas/${ideaId}`)
+    return data
+  },
+  async removeLog(logId: string): Promise<ClearResponse> {
+    const { data } = await axiosInstance.delete<ClearResponse>(`/ideas/logs/${logId}`)
+    return data
+  },
 }
-

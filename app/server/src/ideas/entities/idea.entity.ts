@@ -11,6 +11,7 @@ import { Project } from '../../projects/entities/project.entity';
 import { Caption } from './caption.entity';
 import { GenerationStatus } from './generation-status.enum';
 import { Script } from './script.entity';
+import { Asset } from './asset.entity';
 
 export enum IdeaFormat {
   REEL = 'reel',
@@ -44,6 +45,9 @@ export class Idea {
   @Column({ type: 'text', nullable: true })
   error!: string | null;
 
+  @Column({ type: 'text', nullable: true })
+  imagePrompt!: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 
@@ -58,5 +62,7 @@ export class Idea {
 
   @OneToMany(() => Caption, (caption) => caption.idea)
   captions!: Caption[];
-}
 
+  @OneToMany(() => Asset, (asset) => asset.idea)
+  assets!: Asset[];
+}

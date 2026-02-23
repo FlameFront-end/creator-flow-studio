@@ -5,6 +5,9 @@ export enum AiOperation {
   IDEAS = 'ideas',
   SCRIPT = 'script',
   CAPTION = 'caption',
+  IMAGE_PROMPT = 'image_prompt',
+  IMAGE = 'image',
+  VIDEO = 'video',
 }
 
 @Entity({ name: 'ai_run_logs' })
@@ -45,4 +48,3 @@ export class AiRunLog {
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 }
-

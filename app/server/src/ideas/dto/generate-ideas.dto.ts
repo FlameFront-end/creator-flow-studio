@@ -5,7 +5,6 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  Max,
   MaxLength,
   Min,
   MinLength,
@@ -27,12 +26,10 @@ export class GenerateIdeasDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(3)
-  @Max(10)
+  @Min(1)
   count?: number;
 
   @IsOptional()
   @IsEnum(IdeaFormat)
   format?: IdeaFormat;
 }
-

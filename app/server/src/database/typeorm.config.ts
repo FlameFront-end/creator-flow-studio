@@ -10,6 +10,8 @@ import { Idea } from '../ideas/entities/idea.entity';
 import { Script } from '../ideas/entities/script.entity';
 import { Caption } from '../ideas/entities/caption.entity';
 import { AiRunLog } from '../ideas/entities/ai-run-log.entity';
+import { Asset } from '../ideas/entities/asset.entity';
+import { Step4AssetsImageVideo1730013000000 } from './migrations/1730013000000-step4-assets-image-video';
 
 const toNumber = (value: string | undefined, fallback: number): number => {
   const parsed = Number(value);
@@ -32,11 +34,13 @@ export const buildTypeOrmOptions = (): DataSourceOptions => ({
     Script,
     Caption,
     AiRunLog,
+    Asset,
   ],
   migrations: [
     InitSchema1730010000000,
     Step2PersonaPolicyTemplate1730011000000,
     Step3IdeasAndScripts1730012000000,
+    Step4AssetsImageVideo1730013000000,
   ],
   synchronize: false,
   migrationsRun: true,

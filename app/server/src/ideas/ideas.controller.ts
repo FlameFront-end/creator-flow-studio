@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -8,6 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { GenerateCaptionDto } from './dto/generate-caption.dto';
+import { GenerateImageDto } from './dto/generate-image.dto';
 import { GenerateIdeasDto } from './dto/generate-ideas.dto';
 import { GenerateScriptDto } from './dto/generate-script.dto';
 import { ListAiRunLogsQueryDto } from './dto/list-ai-run-logs-query.dto';
@@ -39,6 +41,27 @@ export class IdeasController {
     return this.ideasService.enqueueCaptionGeneration(ideaId, dto);
   }
 
+  @Post(':id/image-prompt/generate')
+  generateImagePrompt(@Param('id', new ParseUUIDPipe()) ideaId: string) {
+    return this.ideasService.generateImagePrompt(ideaId);
+  }
+
+  @Post(':id/images/generate')
+  enqueueImageGeneration(
+    @Param('id', new ParseUUIDPipe()) ideaId: string,
+    @Body() dto: GenerateImageDto,
+  ) {
+    return this.ideasService.enqueueImageGeneration(ideaId, dto);
+  }
+
+  @Post(':id/videos/generate')
+  enqueueVideoGeneration(
+    @Param('id', new ParseUUIDPipe()) ideaId: string,
+    @Body() dto: GenerateImageDto,
+  ) {
+    return this.ideasService.enqueueVideoGeneration(ideaId, dto);
+  }
+
   @Get()
   findAll(@Query() query: ListIdeasQueryDto) {
     return this.ideasService.findAll(query);
@@ -53,5 +76,24 @@ export class IdeasController {
   findOne(@Param('id', new ParseUUIDPipe()) ideaId: string) {
     return this.ideasService.findOne(ideaId);
   }
-}
 
+  @Delete()
+  clearIdeas(@Query() query: ListIdeasQueryDto) {
+    return this.ideasService.clearIdeas(query);
+  }
+
+  @Delete('logs')
+  clearLogs(@Query() query: ListAiRunLogsQueryDto) {
+    return this.ideasService.clearLogs(query);
+  }
+
+  @Delete('logs/:id')
+  removeLog(@Param('id', new ParseUUIDPipe()) logId: string) {
+    return this.ideasService.removeLog(logId);
+  }
+
+  @Delete(':id')
+  removeIdea(@Param('id', new ParseUUIDPipe()) ideaId: string) {
+    return this.ideasService.removeIdea(ideaId);
+  }
+}

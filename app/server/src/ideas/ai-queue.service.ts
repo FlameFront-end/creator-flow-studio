@@ -19,6 +19,16 @@ export type GenerateCaptionJobData = {
   captionId: string;
 };
 
+export type GenerateImageJobData = {
+  ideaId: string;
+  assetId: string;
+};
+
+export type GenerateVideoJobData = {
+  ideaId: string;
+  assetId: string;
+};
+
 @Injectable()
 export class AiQueueService implements OnModuleDestroy {
   private readonly queue = new Queue(AI_GENERATION_QUEUE, {
@@ -47,8 +57,15 @@ export class AiQueueService implements OnModuleDestroy {
     return this.queue.add(AiJobName.GENERATE_CAPTION, data, this.defaultOptions);
   }
 
+  enqueueImageJob(data: GenerateImageJobData) {
+    return this.queue.add(AiJobName.GENERATE_IMAGE, data, this.defaultOptions);
+  }
+
+  enqueueVideoJob(data: GenerateVideoJobData) {
+    return this.queue.add(AiJobName.GENERATE_VIDEO, data, this.defaultOptions);
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.queue.close();
   }
 }
-
