@@ -1,0 +1,110 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_influencer
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 2004
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_influencer"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  server:
+    build:
+      context: ./app/server
+      dockerfile: Dockerfile
+    container_name: ai_server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      ADMIN_PASSWORD: changeme
+      ADMIN_API_TOKEN: dev-admin-token
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: 2004
+      DB_NAME: ai_influencer
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-1400}
+      SCRIPT_MAX_CHARS: ${SCRIPT_MAX_CHARS:-4000}
+    ports:
+      - "3000:3000"
+
+  worker:
+    build:
+      context: ./app/server
+      dockerfile: Dockerfile
+    container_name: ai_worker
+    restart: unless-stopped
+    command: ["node", "dist/worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      server:
+        condition: service_started
+    environment:
+      ADMIN_PASSWORD: changeme
+      ADMIN_API_TOKEN: dev-admin-token
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: 2004
+      DB_NAME: ai_influencer
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-1400}
+      SCRIPT_MAX_CHARS: ${SCRIPT_MAX_CHARS:-4000}
+
+  client:
+    build:
+      context: ./app/client
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    container_name: ai_client
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_started
+    ports:
+      - "5173:80"
+
+volumes:
+  postgres_data:
+  redis_data:

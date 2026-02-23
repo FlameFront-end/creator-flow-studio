@@ -1,0 +1,29 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="72" y1="56" x2="456" y2="472" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B2A4A" />
+      <stop offset="1" stop-color="#0F172A" />
+    </linearGradient>
+    <linearGradient id="ring" x1="120" y1="96" x2="392" y2="416" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE" />
+      <stop offset="1" stop-color="#38BDF8" />
+    </linearGradient>
+    <linearGradient id="accent" x1="172" y1="164" x2="346" y2="338" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5E9" />
+      <stop offset="1" stop-color="#14B8A6" />
+    </linearGradient>
+  </defs>
+
+  <rect x="40" y="40" width="432" height="432" rx="108" fill="url(#bg)" />
+  <rect x="40" y="40" width="432" height="432" rx="108" stroke="rgba(148,163,184,0.35)" stroke-width="8" />
+
+  <path d="M256 112C176.471 112 112 176.471 112 256C112 335.529 176.471 400 256 400C335.529 400 400 335.529 400 256"
+        stroke="url(#ring)" stroke-width="28" stroke-linecap="round"/>
+
+  <path d="M200 176H292C315.196 176 334 194.804 334 218V310C334 333.196 315.196 352 292 352H220C196.804 352 178 333.196 178 310V198"
+        fill="url(#accent)"/>
+  <path d="M216 224H296M216 264H296M216 304H268" stroke="#E2F6FF" stroke-width="18" stroke-linecap="round"/>
+
+  <circle cx="356" cy="156" r="22" fill="#22D3EE"/>
+</svg>
+

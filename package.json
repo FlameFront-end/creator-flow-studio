@@ -1,0 +1,12 @@
+{
+  "name": "ai-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently -n server,worker,client -c cyan,magenta,green \"npm --prefix app/server run start:dev\" \"npm --prefix app/server run start:worker\" \"npm --prefix app/client run dev\"",
+    "build": "npm --prefix app/server run build && npm --prefix app/client run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
