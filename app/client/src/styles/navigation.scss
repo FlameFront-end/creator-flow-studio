@@ -128,11 +128,10 @@
 
 .dashboard-hero-switch-wrap {
   width: 100%;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  overflow-x: visible;
 
   .dashboard-hero-switch {
-    min-width: 560px;
+    min-width: 0;
   }
 }
 
@@ -219,12 +218,32 @@
   }
 
   .dashboard-hero-actions {
+    order: -1;
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-end;
   }
 
   .dashboard-hero-switch-wrap .dashboard-hero-switch {
-    min-width: 520px;
+    width: 100%;
+  }
+
+  .dashboard-hero-tabs .app-tabs-list {
+    overflow-x: hidden;
+    gap: 4px;
+  }
+
+  .dashboard-hero-tabs .app-tabs-tab {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-left: 8px;
+    padding-right: 8px;
+    font-size: 0.9rem;
+  }
+
+  .dashboard-hero-tabs .app-tabs-tab > span {
+    white-space: normal;
+    text-align: center;
+    line-height: 1.2;
   }
 }
 

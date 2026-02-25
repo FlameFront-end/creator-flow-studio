@@ -132,8 +132,6 @@ export function PersonasSection() {
     deleteMutation.mutate(deleteTarget.id)
   }
 
-  const mutationError = createMutation.error ?? updateMutation.error ?? deleteMutation.error
-
   return (
     <Stack gap="md">
       <form onSubmit={onSubmit} noValidate>
@@ -204,12 +202,6 @@ export function PersonasSection() {
           </Group>
         </Stack>
       </form>
-
-      {mutationError ? (
-        <AppInlineErrorAlert>
-          {getErrorMessage(mutationError, 'Не удалось сохранить персонажа')}
-        </AppInlineErrorAlert>
-      ) : null}
 
       {personasQuery.isError ? (
         <AppInlineErrorAlert>

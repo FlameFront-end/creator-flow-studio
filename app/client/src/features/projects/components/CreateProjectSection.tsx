@@ -1,12 +1,10 @@
 import { Group, Paper, Stack, Textarea, TextInput, Title } from '@ui/core'
 
-import { AppInlineErrorAlert } from '../../../shared/components/AppInlineErrorAlert'
 import { AppButton } from '../../../shared/components/AppButton'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { projectsApi } from '../../../shared/api/services/projects.api'
-import { getErrorMessage } from '../../../shared/lib/httpError'
 import { showErrorToast, showSuccessToast } from '../../../shared/lib/toast'
 import { useFormErrors } from '../../../shared/lib/useFormErrors'
 import type { EditableProject } from '../pages/projects.page'
@@ -121,7 +119,6 @@ export function CreateProjectSection({
 
   const isEditing = Boolean(editingProject)
   const isPending = createProjectMutation.isPending || updateProjectMutation.isPending
-  const mutationError = createProjectMutation.error ?? updateProjectMutation.error
 
   return (
     <Paper className="panel-surface" radius={28} p="xl">
@@ -168,12 +165,6 @@ export function CreateProjectSection({
             </Group>
           </Stack>
         </form>
-
-        {mutationError ? (
-          <AppInlineErrorAlert>
-            {getErrorMessage(mutationError, isEditing ? 'Не удалось обновить проект' : 'Не удалось создать проект')}
-          </AppInlineErrorAlert>
-        ) : null}
       </Stack>
     </Paper>
   )

@@ -210,3 +210,71 @@ html {
   color: var(--app-text) !important;
   line-height: 1.3;
 }
+
+:root[data-color-scheme='light'] {
+  .app-toast {
+    background: rgba(255, 255, 255, 0.96) !important;
+    border-color: rgba(148, 163, 184, 0.42) !important;
+    color: #0f172a !important;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14) !important;
+
+    &.app-toast-success {
+      background: linear-gradient(180deg, rgba(220, 252, 231, 0.96), rgba(209, 250, 229, 0.94)) !important;
+      border-color: rgba(22, 163, 74, 0.35) !important;
+    }
+
+    &.app-toast-error {
+      background: linear-gradient(180deg, rgba(254, 226, 226, 0.96), rgba(254, 226, 226, 0.94)) !important;
+      border-color: rgba(220, 38, 38, 0.35) !important;
+    }
+
+    &.app-toast-warning {
+      background: linear-gradient(180deg, rgba(254, 243, 199, 0.96), rgba(253, 230, 138, 0.94)) !important;
+      border-color: rgba(217, 119, 6, 0.35) !important;
+    }
+  }
+
+  .app-toast-title {
+    color: #0f172a !important;
+  }
+
+  .app-toast-description {
+    color: #334155 !important;
+  }
+
+  .app-toast.app-toast-success [data-icon],
+  .app-toast.app-toast-success svg {
+    color: #166534 !important;
+  }
+
+  .app-toast.app-toast-error [data-icon],
+  .app-toast.app-toast-error svg {
+    color: #b91c1c !important;
+  }
+
+  .app-toast.app-toast-warning [data-icon],
+  .app-toast.app-toast-warning svg {
+    color: #92400e !important;
+  }
+}
+
+@media (max-width: 640px) {
+  [data-sonner-toaster] {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    width: min(calc(100vw - 24px), 420px) !important;
+  }
+
+  [data-sonner-toaster][data-y-position='top'] {
+    top: max(12px, env(safe-area-inset-top)) !important;
+    bottom: auto !important;
+  }
+
+  [data-sonner-toast],
+  .app-toast {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+}

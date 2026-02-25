@@ -227,11 +227,50 @@ $field-required: '.appui-Input-required, .appui-Textarea-required, .appui-Select
 .projects-table-wrap {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
   background: rgba(12, 13, 16, 0.94);
 }
 
 .projects-table {
+  min-width: 700px;
+
+  th,
+  td {
+    white-space: nowrap;
+  }
+
+  th:nth-child(1),
+  td:nth-child(1) {
+    min-width: 160px;
+    max-width: 240px;
+  }
+
+  th:nth-child(2),
+  td:nth-child(2) {
+    min-width: 220px;
+    max-width: 340px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  th:nth-child(3),
+  td:nth-child(3) {
+    min-width: 170px;
+  }
+
+  th:nth-child(4),
+  td:nth-child(4) {
+    min-width: 96px;
+    width: 96px;
+  }
+
+  td:nth-child(4) .appui-Group-root {
+    flex-wrap: nowrap;
+  }
+
   thead th {
     background: rgba(27, 30, 36, 0.92);
     color: #dfe3ea;

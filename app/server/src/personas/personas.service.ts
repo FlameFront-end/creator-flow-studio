@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreatePersonaDto } from './dto/create-persona.dto';
@@ -12,9 +12,12 @@ export class PersonasService {
     private readonly personasRepository: Repository<Persona>,
   ) {}
 
-  create(dto: CreatePersonaDto): Promise<Persona> {
+  async create(dto: CreatePersonaDto): Promise<Persona> {
+    const normalizedName = dto.name.trim();
+    await this.ensureUniqueName(normalizedName);
+
     const persona = this.personasRepository.create({
-      name: dto.name.trim(),
+      name: normalizedName,
       age: dto.age ?? null,
       archetypeTone: dto.archetypeTone?.trim() || null,
       bio: dto.bio?.trim() || null,
@@ -43,7 +46,9 @@ export class PersonasService {
   async update(id: string, dto: UpdatePersonaDto): Promise<Persona> {
     const persona = await this.findOne(id);
     if (dto.name !== undefined) {
-      persona.name = dto.name.trim();
+      const normalizedName = dto.name.trim();
+      await this.ensureUniqueName(normalizedName, id);
+      persona.name = normalizedName;
     }
     if (dto.age !== undefined) {
       persona.age = dto.age;
@@ -67,5 +72,20 @@ export class PersonasService {
   async remove(id: string): Promise<void> {
     const persona = await this.findOne(id);
     await this.personasRepository.remove(persona);
+  }
+
+  private async ensureUniqueName(name: string, excludeId?: string): Promise<void> {
+    const query = this.personasRepository
+      .createQueryBuilder('persona')
+      .where('LOWER(persona.name) = LOWER(:name)', { name });
+
+    if (excludeId) {
+      query.andWhere('persona.id != :excludeId', { excludeId });
+    }
+
+    const duplicateExists = await query.getExists();
+    if (duplicateExists) {
+      throw new ConflictException('Persona name must be unique');
+    }
   }
 }

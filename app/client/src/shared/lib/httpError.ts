@@ -9,6 +9,8 @@ const EXACT_ERROR_TRANSLATIONS: Record<string, string> = {
   'Invalid credentials': 'Неверные учетные данные',
   'Invalid or missing bearer token': 'Отсутствует или некорректный токен доступа',
   'Template key must be unique': 'Шаблон с таким типом уже существует',
+  'Project name must be unique': 'Проект с таким названием уже существует',
+  'Persona name must be unique': 'Персонаж с таким именем уже существует',
   'Prompt template not found': 'Шаблон не найден',
   'Project not found': 'Проект не найден',
   'Persona not found': 'Персонаж не найден',

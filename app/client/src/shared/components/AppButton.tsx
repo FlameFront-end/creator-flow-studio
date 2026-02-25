@@ -139,7 +139,7 @@ export function AppButton({
       size={uiSize}
       disabled={disabled || loading}
       className={cn(
-        'app-button gap-2',
+        'app-button relative gap-2',
         fullWidth && 'w-full',
         `app-button--${resolvedButtonVariant}`,
         colorClassName,
@@ -150,11 +150,14 @@ export function AppButton({
       data-app-button-variant={resolvedButtonVariant}
       data-loading={loading ? 'true' : undefined}
       data-disabled={disabled ? 'true' : undefined}
+      aria-busy={loading}
     >
-      {loading ? <Spinner className="h-3.5 w-3.5" /> : null}
-      {leftSection ? <span className="inline-flex shrink-0 items-center">{leftSection}</span> : null}
-      {children ? <span>{children}</span> : null}
-      {rightSection ? <span className="inline-flex shrink-0 items-center">{rightSection}</span> : null}
+      {loading ? <Spinner className="pointer-events-none absolute h-3.5 w-3.5" /> : null}
+      <span className={cn('inline-flex items-center gap-2', loading && 'opacity-0')}>
+        {leftSection ? <span className="inline-flex shrink-0 items-center">{leftSection}</span> : null}
+        {children ? <span>{children}</span> : null}
+        {rightSection ? <span className="inline-flex shrink-0 items-center">{rightSection}</span> : null}
+      </span>
     </Button>
   )
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AiRunLog } from '../ideas/entities/ai-run-log.entity';
@@ -16,8 +16,11 @@ export class ProjectsService {
   ) {}
 
   async create(dto: CreateProjectDto): Promise<Project> {
+    const normalizedName = dto.name.trim();
+    await this.ensureUniqueName(normalizedName);
+
     const project = this.projectsRepository.create({
-      name: dto.name.trim(),
+      name: normalizedName,
       description: dto.description?.trim() || null,
     });
 
@@ -45,7 +48,9 @@ export class ProjectsService {
     const project = await this.findOne(id);
 
     if (dto.name !== undefined) {
-      project.name = dto.name.trim();
+      const normalizedName = dto.name.trim();
+      await this.ensureUniqueName(normalizedName, id);
+      project.name = normalizedName;
     }
     if (dto.description !== undefined) {
       project.description = dto.description.trim() || null;
@@ -58,5 +63,20 @@ export class ProjectsService {
     const project = await this.findOne(id);
     await this.logsRepository.delete({ projectId: id });
     await this.projectsRepository.remove(project);
+  }
+
+  private async ensureUniqueName(name: string, excludeId?: string): Promise<void> {
+    const query = this.projectsRepository
+      .createQueryBuilder('project')
+      .where('LOWER(project.name) = LOWER(:name)', { name });
+
+    if (excludeId) {
+      query.andWhere('project.id != :excludeId', { excludeId });
+    }
+
+    const duplicateExists = await query.getExists();
+    if (duplicateExists) {
+      throw new ConflictException('Project name must be unique');
+    }
   }
 }
