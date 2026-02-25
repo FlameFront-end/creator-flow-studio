@@ -1,10 +1,10 @@
-import { Box, Card, Collapse, Group, Paper, Progress, Stack, Text, ThemeIcon, Title } from '@ui/core'
+import { Box, Card, Collapse, Group, Loader, Paper, Progress, Stack, Text, ThemeIcon, Title } from '@ui/core'
 
 
 import { AppBadge } from '../../../shared/components/AppBadge'
 import { AppButton } from '../../../shared/components/AppButton'
 import { IconCheck, IconChevronDown, IconCircleDashed } from '@tabler/icons-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { TransientErrorAlert } from '../../../shared/components/TransientErrorAlert'
 import { getErrorMessage } from '../../../shared/lib/httpError'
 import type { IdeasLabController } from '../hooks/useIdeasLabController'
@@ -34,9 +34,23 @@ type OpenAdvancedSettingsEventDetail = {
   ideaId?: string
 }
 
-export const IdeasListPanel = ({ controller }: { controller: IdeasLabController }) => {
+type IdeasListPanelProps = {
+  controller: IdeasLabController
+  showPendingState?: boolean
+}
+
+export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasListPanelProps) => {
   const ideas = controller.ideasQuery.data ?? []
   const hasIdeas = ideas.length > 0
+  const showIdeasSkeletons = !hasIdeas && (controller.isWaitingForIdeas || showPendingState)
+  const showHeaderHint = hasIdeas || showIdeasSkeletons
+  const skeletonIdeasCount = useMemo(() => {
+    const parsed = Number(controller.count)
+    if (!Number.isFinite(parsed)) {
+      return 3
+    }
+    return Math.min(8, Math.max(1, Math.floor(parsed)))
+  }, [controller.count])
   const showClearIdeasButton = Boolean(controller.projectId) && hasIdeas
   const [transientError, setTransientError] = useState<string | null>(null)
   const [expandedIdeaId, setExpandedIdeaId] = useState<string | null>(null)
@@ -137,20 +151,23 @@ export const IdeasListPanel = ({ controller }: { controller: IdeasLabController 
   }, [controller.setSelectedIdeaId])
 
   return (
-    <Paper className="panel-surface" radius={24} p="lg">
+    <Paper className="panel-surface ideas-list-panel" radius={24} p="lg">
       <Stack gap="sm">
         <Group justify="space-between" align="center">
           <Stack gap={2}>
             <Title order={4}>Список идей</Title>
-            <Text size="xs" c="dimmed">
-              Нажмите на карточку, чтобы выбрать идею. Подготовка промптов вынесена в "Расширенные настройки".
-            </Text>
+            {showHeaderHint ? (
+              <Text size="xs" c="dimmed">
+                Нажмите на карточку, чтобы выбрать идею. Подготовка промптов вынесена в "Расширенные настройки".
+              </Text>
+            ) : null}
           </Stack>
           {showClearIdeasButton ? (
             <AppButton
               size="xs"
               variant="default"
               color="red"
+              loading={controller.clearIdeasMutation.isPending}
               disabled={controller.clearIdeasMutation.isPending}
               onClick={() => controller.setClearIdeasModalOpen(true)}
             >
@@ -160,7 +177,73 @@ export const IdeasListPanel = ({ controller }: { controller: IdeasLabController 
         </Group>
 
         {!hasIdeas ? (
-          <Text c="dimmed">Пока нет идей для выбранного проекта</Text>
+          showIdeasSkeletons ? (
+            <Stack gap={6}>
+              <Group gap="xs">
+                <Loader size="xs" />
+                <Text c="dimmed">Генерация запущена, ожидаем первые идеи...</Text>
+              </Group>
+              <Text size="xs" c="dimmed">
+                Список обновится автоматически через несколько секунд.
+              </Text>
+              <Stack gap="sm" className="ideas-skeleton-list">
+                {Array.from({ length: skeletonIdeasCount }).map((_, index) => (
+                  <Card key={`ideas-skeleton-${index}`} withBorder radius="md" p="md" className="ideas-skeleton-card">
+                    <Stack gap="sm">
+                      <Group justify="space-between" align="flex-start" wrap="nowrap">
+                        <Stack gap={4} style={{ flex: 1 }}>
+                          <div className="ideas-skeleton-line ideas-skeleton-line-title" />
+                          <div className="ideas-skeleton-line ideas-skeleton-line-subtitle" />
+                          <div className="ideas-skeleton-line ideas-skeleton-line-subtitle ideas-skeleton-line-short" />
+                        </Stack>
+                        <div className="ideas-skeleton-pill ideas-skeleton-pill-danger" />
+                      </Group>
+
+                      <Group gap="xs" wrap="wrap">
+                        <div className="ideas-skeleton-pill" />
+                        <div className="ideas-skeleton-pill" />
+                        <div className="ideas-skeleton-pill ideas-skeleton-pill-wide" />
+                      </Group>
+
+                      <Stack gap={6}>
+                        <Group justify="space-between" wrap="nowrap">
+                          <div className="ideas-skeleton-line ideas-skeleton-line-caption" />
+                          <div className="ideas-skeleton-line ideas-skeleton-line-caption ideas-skeleton-line-caption-short" />
+                        </Group>
+                        <div className="ideas-skeleton-progress" />
+                      </Stack>
+
+                      <Stack gap={8}>
+                        {Array.from({ length: 4 }).map((_, stepIndex) => (
+                          <Group key={`ideas-skeleton-step-${index}-${stepIndex}`} justify="space-between" wrap="nowrap">
+                            <Group gap="xs" wrap="nowrap">
+                              <div className="ideas-skeleton-dot" />
+                              <div className="ideas-skeleton-line ideas-skeleton-line-step" />
+                            </Group>
+                            <Group gap="xs" wrap="nowrap">
+                              <div className="ideas-skeleton-line ideas-skeleton-line-status" />
+                              <div className="ideas-skeleton-pill ideas-skeleton-pill-action" />
+                            </Group>
+                          </Group>
+                        ))}
+                      </Stack>
+
+                      <Group justify="center">
+                        <div className="ideas-skeleton-pill ideas-skeleton-pill-advanced" />
+                      </Group>
+                    </Stack>
+                  </Card>
+                ))}
+              </Stack>
+            </Stack>
+          ) : (
+            <div className="ideas-empty-state">
+              <Text fw={700}>Идей пока нет</Text>
+              <Text size="sm" c="dimmed">
+                Запустите генерацию во вкладке «Бриф».
+              </Text>
+            </div>
+          )
         ) : (
           ideas.map((idea) => {
             const scriptDone = idea.latestScript?.status === 'succeeded'
@@ -263,7 +346,7 @@ export const IdeasListPanel = ({ controller }: { controller: IdeasLabController 
                     : 'Успех'
                   : imagePromptDone
                     ? formatStatusLabel(idea.latestImageStatus ?? 'queued')
-                    : 'Нужен подготовленный промпт',
+                    : 'Ожидает промпт',
               },
               {
                 key: 'video',
@@ -275,7 +358,7 @@ export const IdeasListPanel = ({ controller }: { controller: IdeasLabController 
                     : 'Успех'
                   : videoPromptDone
                     ? formatStatusLabel(idea.latestVideoStatus ?? 'queued')
-                    : 'Нужен подготовленный промпт',
+                    : 'Ожидает промпт',
               },
             ]
 
@@ -547,7 +630,3 @@ export const IdeasListPanel = ({ controller }: { controller: IdeasLabController 
     </Paper>
   )
 }
-
-
-
-

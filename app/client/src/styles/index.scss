@@ -1,0 +1,81 @@
+@use './tokens.scss';
+@use './base.scss';
+@use './forms-and-tables.scss';
+@use './navigation.scss';
+@use './prompt-studio.scss';
+@use './error-about.scss';
+@use './ideas-lab.scss';
+@use './asset-viewer-post.scss';
+@use './vercel-refinement.scss';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 210 25% 98%;
+  --foreground: 222 24% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 24% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 24% 10%;
+  --primary: 222 30% 10%;
+  --primary-foreground: 210 20% 98%;
+  --secondary: 220 18% 95%;
+  --secondary-foreground: 222 24% 12%;
+  --muted: 220 16% 95%;
+  --muted-foreground: 220 9% 42%;
+  --accent: 220 16% 93%;
+  --accent-foreground: 222 24% 10%;
+  --destructive: 0 84% 58%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 220 13% 84%;
+  --input: 220 13% 84%;
+  --ring: 222 22% 36%;
+  --radius: 0.72rem;
+}
+
+:root[data-color-scheme='dark'] {
+  --background: 224 30% 6%;
+  --foreground: 210 20% 96%;
+  --card: 224 25% 8%;
+  --card-foreground: 210 20% 96%;
+  --popover: 224 25% 8%;
+  --popover-foreground: 210 20% 96%;
+  --primary: 210 20% 98%;
+  --primary-foreground: 224 24% 9%;
+  --secondary: 222 18% 14%;
+  --secondary-foreground: 210 20% 96%;
+  --muted: 222 16% 13%;
+  --muted-foreground: 220 10% 70%;
+  --accent: 222 18% 14%;
+  --accent-foreground: 210 20% 96%;
+  --destructive: 0 76% 58%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 220 12% 22%;
+  --input: 220 12% 22%;
+  --ring: 214 24% 78%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    text-rendering: geometricPrecision;
+  }
+}
+
+body {
+  background-image: none;
+  background-attachment: fixed;
+}
+
+:root[data-color-scheme='dark'] {
+  body {
+    background-image: none;
+  }
+}
+

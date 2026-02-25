@@ -1,14 +1,14 @@
 import { RouterProvider } from 'react-router-dom'
 import { ErrorBoundary } from '../shared/components/ErrorBoundary'
-import { Providers } from './providers'
+import { AppProviders } from './providers/AppProviders'
 import { router } from './model/router'
 
 export const App = () => {
   return (
     <ErrorBoundary>
-      <Providers>
+      <AppProviders>
         <RouterProvider router={router} />
-      </Providers>
+      </AppProviders>
     </ErrorBoundary>
   )
 }

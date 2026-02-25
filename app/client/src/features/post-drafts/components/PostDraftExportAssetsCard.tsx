@@ -10,7 +10,7 @@ import {
 } from '@tabler/icons-react'
 import type { PostDraftAsset } from '../../../shared/api/services/postDrafts.api'
 import { formatRuDateTime } from '../../../shared/lib/formatters'
-import type { AssetViewerPayload } from '../../ideas-lab/components/AssetViewerModal'
+import type { AssetViewerPayload } from '../../../shared/components/AssetViewerModal'
 import { formatAssetTypeLabel, resolveAssetUrl } from '../model/postDraftExport.utils'
 
 type PostDraftExportAssetsCardProps = {

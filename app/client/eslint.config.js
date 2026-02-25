@@ -19,5 +19,68 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/features/*/*', '@/features/*/*/*', '@/features/*/*/*/*'],
+              message:
+                'Импортируй из feature только через публичный API модуля (например, "@/features/<feature>").',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/features/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/features/*', '@/features/*/*', '@/features/*/*/*', '@/features/*/*/*/*'],
+              message:
+                'Запрещены feature->feature импорты. Вынеси общее в shared или импортируй через app-слой.',
+            },
+            {
+              group: ['../../features/*', '../../../features/*', '../../../../features/*'],
+              message:
+                'Запрещены feature->feature относительные импорты. Вынеси общее в shared.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/shared/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@/app/*',
+                '@/app/*/*',
+                '@/features/*',
+                '@/features/*/*',
+                '@/features/*/*/*',
+                '../../app/*',
+                '../../../app/*',
+                '../../features/*',
+                '../../../features/*',
+              ],
+              message:
+                'Слой shared не должен зависеть от app/features. Перенеси зависимость выше по слоям.',
+            },
+          ],
+        },
+      ],
+    },
   },
 ])

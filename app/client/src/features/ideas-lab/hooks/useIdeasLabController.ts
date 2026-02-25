@@ -1,48 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ideasApi, type Idea, type IdeaFormat } from '../../../shared/api/services/ideas.api'
 import { personasApi } from '../../../shared/api/services/personas.api'
 import { projectsApi } from '../../../shared/api/services/projects.api'
 import { showErrorToast, showValidationToast } from '../../../shared/lib/toast'
 import {
-  AI_LOGS_QUERY_KEY,
-  IDEA_DETAILS_QUERY_KEY,
+  PERSONAS_QUERY_KEY,
+  PROJECTS_QUERY_KEY,
   IDEAS_DEFAULT_COUNT,
   IDEAS_DEFAULT_TOPIC,
-  IDEAS_LOGS_COLLAPSED_STORAGE_KEY,
-  IDEAS_QUERY_KEY,
-  IDEAS_SELECTED_ID_BY_PROJECT_STORAGE_KEY,
+  aiLogsQueryKey,
+  ideaDetailsQueryKey,
+  ideasQueryKey,
 } from '../model/ideasLab.constants'
-
-type PersistedSelectedIdeaByProject = Record<string, string>
-
-const readPersistedSelectedIdeaByProject = (): PersistedSelectedIdeaByProject => {
-  if (typeof window === 'undefined') return {}
-
-  const raw = window.localStorage.getItem(IDEAS_SELECTED_ID_BY_PROJECT_STORAGE_KEY)
-  if (!raw) return {}
-
-  try {
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return {}
-    }
-
-    const entries = Object.entries(parsed as Record<string, unknown>).filter(
-      (entry): entry is [string, string] =>
-        typeof entry[0] === 'string' && typeof entry[1] === 'string' && entry[1].length > 0,
-    )
-
-    return Object.fromEntries(entries)
-  } catch {
-    return {}
-  }
-}
-
-const writePersistedSelectedIdeaByProject = (value: PersistedSelectedIdeaByProject) => {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(IDEAS_SELECTED_ID_BY_PROJECT_STORAGE_KEY, JSON.stringify(value))
-}
+import {
+  readIdeasLogsCollapsed,
+  readPersistedSelectedIdeaByProject,
+  writeIdeasLogsCollapsed,
+  writePersistedSelectedIdeaByProject,
+} from '../model/ideasLab.storage'
+import { getIdeasLogsStats } from '../model/ideasLab.logs'
+import { validateStartIdeasGeneration } from '../model/ideasLab.validation'
 
 export const useIdeasLabController = () => {
   const queryClient = useQueryClient()
@@ -58,16 +36,15 @@ export const useIdeasLabController = () => {
   const [clearLogsModalOpen, setClearLogsModalOpen] = useState(false)
   const [deleteIdeaId, setDeleteIdeaId] = useState<string | null>(null)
   const [deleteLogId, setDeleteLogId] = useState<string | null>(null)
-  const [isLogsCollapsed, setIsLogsCollapsed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false
-    return window.localStorage.getItem(IDEAS_LOGS_COLLAPSED_STORAGE_KEY) === '1'
-  })
+  const [isLogsCollapsed, setIsLogsCollapsed] = useState<boolean>(readIdeasLogsCollapsed)
+  const [isWaitingForIdeas, setIsWaitingForIdeas] = useState(false)
+  const waitingIdeasTimerRef = useRef<number | null>(null)
 
-  const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: projectsApi.getProjects })
-  const personasQuery = useQuery({ queryKey: ['personas'], queryFn: personasApi.getPersonas })
+  const projectsQuery = useQuery({ queryKey: PROJECTS_QUERY_KEY, queryFn: projectsApi.getProjects })
+  const personasQuery = useQuery({ queryKey: PERSONAS_QUERY_KEY, queryFn: personasApi.getPersonas })
 
   useEffect(() => {
-    window.localStorage.setItem(IDEAS_LOGS_COLLAPSED_STORAGE_KEY, isLogsCollapsed ? '1' : '0')
+    writeIdeasLogsCollapsed(isLogsCollapsed)
   }, [isLogsCollapsed])
 
   useEffect(() => {
@@ -83,11 +60,29 @@ export const useIdeasLabController = () => {
   }, [personaId, personasQuery.data])
 
   const ideasQuery = useQuery({
-    queryKey: [...IDEAS_QUERY_KEY, projectId],
+    queryKey: ideasQueryKey(projectId),
     queryFn: () => ideasApi.getIdeas(projectId as string),
     enabled: Boolean(projectId),
     refetchInterval: 4000,
   })
+
+  useEffect(() => {
+    return () => {
+      if (waitingIdeasTimerRef.current !== null) {
+        window.clearTimeout(waitingIdeasTimerRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if ((ideasQuery.data?.length ?? 0) > 0) {
+      setIsWaitingForIdeas(false)
+      if (waitingIdeasTimerRef.current !== null) {
+        window.clearTimeout(waitingIdeasTimerRef.current)
+        waitingIdeasTimerRef.current = null
+      }
+    }
+  }, [ideasQuery.data])
 
   useEffect(() => {
     const ideas = ideasQuery.data ?? []
@@ -135,23 +130,31 @@ export const useIdeasLabController = () => {
   }, [projectId, selectedIdeaId, ideasQuery.data])
 
   const detailsQuery = useQuery({
-    queryKey: [...IDEA_DETAILS_QUERY_KEY, selectedIdeaId],
+    queryKey: ideaDetailsQueryKey(selectedIdeaId),
     queryFn: () => ideasApi.getIdea(selectedIdeaId as string),
     enabled: Boolean(selectedIdeaId),
     refetchInterval: 4000,
   })
 
   const logsQuery = useQuery({
-    queryKey: [...AI_LOGS_QUERY_KEY, projectId],
+    queryKey: aiLogsQueryKey(projectId),
     queryFn: () => ideasApi.getLogs(projectId as string),
     enabled: Boolean(projectId),
     refetchInterval: 4000,
   })
 
-  const invalidateAll = () => {
-    void queryClient.invalidateQueries({ queryKey: [...IDEAS_QUERY_KEY, projectId] })
-    void queryClient.invalidateQueries({ queryKey: [...IDEA_DETAILS_QUERY_KEY, selectedIdeaId] })
-    void queryClient.invalidateQueries({ queryKey: [...AI_LOGS_QUERY_KEY, projectId] })
+  const invalidateAll = async () => {
+    if (projectId) {
+      await queryClient.invalidateQueries({ queryKey: ideasQueryKey(projectId) })
+      await queryClient.refetchQueries({ queryKey: ideasQueryKey(projectId), type: 'active' })
+      await queryClient.invalidateQueries({ queryKey: aiLogsQueryKey(projectId) })
+      await queryClient.refetchQueries({ queryKey: aiLogsQueryKey(projectId), type: 'active' })
+    }
+
+    if (selectedIdeaId) {
+      await queryClient.invalidateQueries({ queryKey: ideaDetailsQueryKey(selectedIdeaId) })
+      await queryClient.refetchQueries({ queryKey: ideaDetailsQueryKey(selectedIdeaId), type: 'active' })
+    }
   }
 
   const generateIdeasMutation = useMutation({
@@ -202,7 +205,7 @@ export const useIdeasLabController = () => {
 
   const clearIdeasMutation = useMutation({
     mutationFn: (currentProjectId: string) => ideasApi.clearIdeas(currentProjectId),
-    onSuccess: (_, currentProjectId) => {
+    onSuccess: async (_, currentProjectId) => {
       const persisted = readPersistedSelectedIdeaByProject()
       if (persisted[currentProjectId]) {
         delete persisted[currentProjectId]
@@ -210,38 +213,60 @@ export const useIdeasLabController = () => {
       }
 
       setSelectedIdeaId(null)
+      await queryClient.invalidateQueries({ queryKey: ideasQueryKey(currentProjectId) })
+      await queryClient.refetchQueries({ queryKey: ideasQueryKey(currentProjectId), type: 'active' })
+      await queryClient.invalidateQueries({ queryKey: aiLogsQueryKey(currentProjectId) })
+      await queryClient.refetchQueries({ queryKey: aiLogsQueryKey(currentProjectId), type: 'active' })
       setClearIdeasModalOpen(false)
-      invalidateAll()
     },
     onError: (error) => showErrorToast(error, 'Не удалось очистить список идей'),
   })
 
   const clearLogsMutation = useMutation({
     mutationFn: (currentProjectId: string) => ideasApi.clearLogs(currentProjectId),
-    onSuccess: () => {
+    onSuccess: async (_, currentProjectId) => {
+      await queryClient.invalidateQueries({ queryKey: aiLogsQueryKey(currentProjectId) })
+      await queryClient.refetchQueries({ queryKey: aiLogsQueryKey(currentProjectId), type: 'active' })
       setClearLogsModalOpen(false)
-      invalidateAll()
     },
     onError: (error) => showErrorToast(error, 'Не удалось очистить AI-логи'),
   })
 
   const removeIdeaMutation = useMutation({
     mutationFn: (ideaId: string) => ideasApi.removeIdea(ideaId),
-    onSuccess: () => {
-      if (deleteIdeaId && deleteIdeaId === selectedIdeaId) {
+    onSuccess: async (_, removedIdeaId) => {
+      if (removedIdeaId === selectedIdeaId) {
         setSelectedIdeaId(null)
       }
+
+      if (projectId) {
+        const persisted = readPersistedSelectedIdeaByProject()
+        if (persisted[projectId] === removedIdeaId) {
+          delete persisted[projectId]
+          writePersistedSelectedIdeaByProject(persisted)
+        }
+      }
+
+      if (projectId) {
+        await queryClient.invalidateQueries({ queryKey: ideasQueryKey(projectId) })
+        await queryClient.refetchQueries({ queryKey: ideasQueryKey(projectId), type: 'active' })
+        await queryClient.invalidateQueries({ queryKey: aiLogsQueryKey(projectId) })
+        await queryClient.refetchQueries({ queryKey: aiLogsQueryKey(projectId), type: 'active' })
+      }
+
       setDeleteIdeaId(null)
-      invalidateAll()
     },
     onError: (error) => showErrorToast(error, 'Не удалось удалить идею'),
   })
 
   const removeLogMutation = useMutation({
     mutationFn: (logId: string) => ideasApi.removeLog(logId),
-    onSuccess: () => {
+    onSuccess: async () => {
+      if (projectId) {
+        await queryClient.invalidateQueries({ queryKey: aiLogsQueryKey(projectId) })
+        await queryClient.refetchQueries({ queryKey: aiLogsQueryKey(projectId), type: 'active' })
+      }
       setDeleteLogId(null)
-      invalidateAll()
     },
     onError: (error) => showErrorToast(error, 'Не удалось удалить лог'),
   })
@@ -252,38 +277,32 @@ export const useIdeasLabController = () => {
   )
 
   const logsStats = useMemo(() => {
-    const logs = logsQuery.data ?? []
-    return {
-      total: logs.length,
-      successCount: logs.filter((log) => log.status === 'succeeded').length,
-      failedCount: logs.filter((log) => log.status === 'failed').length,
-      avgLatencyMs: logs.length
-        ? Math.round(logs.reduce((acc, log) => acc + (log.latencyMs ?? 0), 0) / logs.length)
-        : 0,
-      totalTokens: logs.reduce((acc, log) => acc + (log.tokens ?? 0), 0),
-    }
+    return getIdeasLogsStats(logsQuery.data ?? [])
   }, [logsQuery.data])
 
-  const startIdeaGeneration = () => {
-    const parsedCount = Number(count)
-
-    if (!projectId || !personaId || topic.trim().length < 3) {
-      showValidationToast('Выберите проект, персонажа и заполните тему')
-      return
-    }
-
-    if (!Number.isFinite(parsedCount) || parsedCount < 1) {
-      showValidationToast('Количество идей должно быть числом от 1')
-      return
-    }
-
-    generateIdeasMutation.mutate({
+  const startIdeaGeneration = (): boolean => {
+    const validated = validateStartIdeasGeneration({
       projectId,
       personaId,
-      topic: topic.trim(),
-      count: Math.floor(parsedCount),
+      topic,
+      count,
       format,
     })
+    if ('error' in validated) {
+      showValidationToast(validated.error)
+      return false
+    }
+
+    generateIdeasMutation.mutate(validated)
+    setIsWaitingForIdeas(true)
+    if (waitingIdeasTimerRef.current !== null) {
+      window.clearTimeout(waitingIdeasTimerRef.current)
+    }
+    waitingIdeasTimerRef.current = window.setTimeout(() => {
+      setIsWaitingForIdeas(false)
+      waitingIdeasTimerRef.current = null
+    }, 30000)
+    return true
   }
 
   return {
@@ -309,6 +328,7 @@ export const useIdeasLabController = () => {
     setDeleteLogId,
     isLogsCollapsed,
     setIsLogsCollapsed,
+    isWaitingForIdeas,
     projectsQuery,
     personasQuery,
     ideasQuery,

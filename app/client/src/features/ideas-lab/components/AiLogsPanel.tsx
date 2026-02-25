@@ -52,6 +52,7 @@ export const AiLogsPanel = ({ controller }: { controller: IdeasLabController }) 
                 size="xs"
                 variant="default"
                 color="red"
+                loading={controller.clearLogsMutation.isPending}
                 disabled={controller.clearLogsMutation.isPending}
                 onClick={() => controller.setClearLogsModalOpen(true)}
               >
@@ -117,7 +118,14 @@ export const AiLogsPanel = ({ controller }: { controller: IdeasLabController }) 
                           size="xs"
                           color="red"
                           variant="subtle"
-                          disabled={controller.removeLogMutation.isPending}
+                          loading={
+                            controller.removeLogMutation.isPending &&
+                            controller.removeLogMutation.variables === log.id
+                          }
+                          disabled={
+                            controller.removeLogMutation.isPending &&
+                            controller.removeLogMutation.variables !== log.id
+                          }
                           onClick={() => controller.removeLogMutation.mutate(log.id)}
                           aria-label="Удалить лог"
                           className="h-8 w-8 p-0"

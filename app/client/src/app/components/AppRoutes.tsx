@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { Spinner } from '../../shared/components/ui/spinner'
-import { ROUTES } from '../../shared/model/routes'
+import { Loader } from '@ui/core'
+import { ROUTE_PREFIXES, ROUTES } from '../../shared/model/routes'
 import { useAuthToken } from '../../shared/lib/auth'
 
 export const AppRoutes = memo(() => {
@@ -11,18 +11,18 @@ export const AppRoutes = memo(() => {
   if (token === undefined) {
     return (
       <div className="grid min-h-screen place-items-center">
-        <Spinner className="h-8 w-8 text-muted-foreground" />
+        <Loader className="h-8 w-8 text-muted-foreground" />
       </div>
     )
   }
 
   const authenticated = Boolean(token)
 
-  if (!authenticated && !location.pathname.startsWith('/auth/')) {
+  if (!authenticated && !location.pathname.startsWith(ROUTE_PREFIXES.AUTH)) {
     return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />
   }
 
-  if (authenticated && location.pathname.startsWith('/auth/')) {
+  if (authenticated && location.pathname.startsWith(ROUTE_PREFIXES.AUTH)) {
     return <Navigate to={ROUTES.HOME} replace />
   }
 

@@ -1,8 +1,48 @@
 import { Group, Paper, Select, SimpleGrid, Stack, Textarea, TextInput, Title } from '@ui/core'
+import { useEffect, useState } from 'react'
 import { AppButton } from '../../../shared/components/AppButton'
 import type { IdeasLabController } from '../hooks/useIdeasLabController'
 
-export const IdeasGenerationPanel = ({ controller }: { controller: IdeasLabController }) => {
+type IdeasGenerationPanelProps = {
+  controller: IdeasLabController
+  onGenerationAccepted?: () => void
+}
+
+export const IdeasGenerationPanel = ({
+  controller,
+  onGenerationAccepted,
+}: IdeasGenerationPanelProps) => {
+  const [awaitingAcceptance, setAwaitingAcceptance] = useState(false)
+
+  useEffect(() => {
+    if (!awaitingAcceptance) {
+      return
+    }
+
+    if (controller.generateIdeasMutation.isSuccess) {
+      setAwaitingAcceptance(false)
+      onGenerationAccepted?.()
+      return
+    }
+
+    if (controller.generateIdeasMutation.isError) {
+      setAwaitingAcceptance(false)
+    }
+  }, [
+    awaitingAcceptance,
+    controller.generateIdeasMutation.isError,
+    controller.generateIdeasMutation.isSuccess,
+    onGenerationAccepted,
+  ])
+
+  const handleStartGeneration = () => {
+    controller.generateIdeasMutation.reset()
+    const started = controller.startIdeaGeneration()
+    if (started) {
+      setAwaitingAcceptance(true)
+    }
+  }
+
   return (
     <Paper className="panel-surface" radius={28} p="xl">
       <Stack gap="md">
@@ -61,7 +101,7 @@ export const IdeasGenerationPanel = ({ controller }: { controller: IdeasLabContr
           <AppButton
             buttonVariant="dark"
             loading={controller.generateIdeasMutation.isPending}
-            onClick={controller.startIdeaGeneration}
+            onClick={handleStartGeneration}
             disabled={!controller.projectId || !controller.personaId}
           >
             Сгенерировать идеи

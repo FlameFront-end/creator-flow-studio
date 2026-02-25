@@ -10,7 +10,12 @@ import { ConfirmActionModal } from '../../../shared/components/ConfirmActionModa
 import { formatRuDateTime } from '../../../shared/lib/formatters'
 import { showErrorToast, showSuccessToast } from '../../../shared/lib/toast'
 import type { IdeasLabController } from '../hooks/useIdeasLabController'
-import { IDEAS_OPEN_ADVANCED_SETTINGS_EVENT } from '../model/ideasLab.constants'
+import {
+  IDEAS_OPEN_ADVANCED_SETTINGS_EVENT,
+  ideaDetailsQueryKey,
+  ideasQueryKey,
+  postDraftLatestQueryKey,
+} from '../model/ideasLab.constants'
 import {
   formatAssetTypeLabel,
   formatIdeaFormatLabel,
@@ -18,7 +23,7 @@ import {
   resolveAssetUrl,
   statusColor,
 } from '../lib/ideasLab.formatters'
-import { AssetViewerModal, type AssetViewerPayload } from './AssetViewerModal'
+import { AssetViewerModal, type AssetViewerPayload } from '../../../shared/components/AssetViewerModal'
 import { PostDraftPanel } from './PostDraftPanel'
 
 const sortByDateDesc = <T extends { createdAt: string }>(items: T[]): T[] =>
@@ -42,6 +47,7 @@ export const IdeaResultsPanel = ({
   controller: IdeasLabController
 }) => {
   const { selectedIdea, detailsQuery } = controller
+  const hasIdeas = (controller.ideasQuery.data?.length ?? 0) > 0
   const [previewAsset, setPreviewAsset] = useState<AssetViewerPayload | null>(null)
   const [deleteAssetId, setDeleteAssetId] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -72,13 +78,16 @@ export const IdeaResultsPanel = ({
   }
 
   const removeAssetMutation = useMutation({
-    mutationFn: (assetId: string) => ideasApi.removeAsset(assetId),
-    onSuccess: () => {
+    mutationFn: ({ assetId }: { assetId: string; ideaId: string }) => ideasApi.removeAsset(assetId),
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ideaDetailsQueryKey(variables.ideaId) })
+      await queryClient.refetchQueries({ queryKey: ideaDetailsQueryKey(variables.ideaId), type: 'active' })
+      await queryClient.invalidateQueries({ queryKey: ideasQueryKey(controller.projectId) })
+      await queryClient.refetchQueries({ queryKey: ideasQueryKey(controller.projectId), type: 'active' })
+      await queryClient.invalidateQueries({ queryKey: postDraftLatestQueryKey(variables.ideaId) })
+      await queryClient.refetchQueries({ queryKey: postDraftLatestQueryKey(variables.ideaId), type: 'active' })
       setDeleteAssetId(null)
       showSuccessToast('Ассет удален')
-      void queryClient.invalidateQueries({ queryKey: ['idea-details', selectedIdea?.id] })
-      void queryClient.invalidateQueries({ queryKey: ['ideas', controller.projectId] })
-      void queryClient.invalidateQueries({ queryKey: ['post-draft-latest', selectedIdea?.id] })
     },
     onError: (error) => showErrorToast(error, 'Не удалось удалить ассет'),
   })
@@ -88,7 +97,14 @@ export const IdeaResultsPanel = ({
       <Stack gap="sm">
         <Title order={4}>Результаты по идее</Title>
         {!selectedIdea ? (
-          <Text c="dimmed" className="ideas-results-empty-text">Выберите идею слева</Text>
+          <div className="ideas-empty-state">
+            <Text fw={700}>{hasIdeas ? 'Выберите идею слева' : 'Результаты пока недоступны'}</Text>
+            <Text size="sm" c="dimmed">
+              {hasIdeas
+                ? 'Здесь появятся сценарий, подпись и ассеты.'
+                : 'Сначала сгенерируйте и выберите идею.'}
+            </Text>
+          </div>
         ) : (
           <>
             <Card withBorder radius="md" p="md" className="ideas-results-summary">
@@ -294,7 +310,11 @@ export const IdeaResultsPanel = ({
         confirmLabel="Удалить ассет"
         loading={removeAssetMutation.isPending}
         onClose={() => setDeleteAssetId(null)}
-        onConfirm={() => deleteAssetId && removeAssetMutation.mutate(deleteAssetId)}
+        onConfirm={() =>
+          deleteAssetId &&
+          selectedIdea &&
+          removeAssetMutation.mutate({ assetId: deleteAssetId, ideaId: selectedIdea.id })
+        }
       />
     </Paper>
   )

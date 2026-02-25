@@ -3,8 +3,7 @@ import { IconBook2, IconLogout2, IconMoonStars, IconSun } from '@tabler/icons-re
 import { useNavigate } from 'react-router-dom'
 import { AppButton } from '../../../shared/components/AppButton'
 import { AppTabs } from '../../../shared/components/AppTabs'
-import { ROUTES } from '../../../shared/model/routes'
-import type { AdminView } from './DashboardShell'
+import { ROUTES, type AdminView } from '../../../shared/model/routes'
 
 type DashboardHeroProps = {
   view: AdminView

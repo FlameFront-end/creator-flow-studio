@@ -1,29 +1,26 @@
-import { ActionIcon, Card, Divider, Group, Paper, Select, SimpleGrid, Stack, Text, Textarea, TextInput, Title } from '@ui/core'
+import { Divider, Group, Paper, Select, SimpleGrid, Stack, Text, Textarea, TextInput, Title } from '@ui/core'
 
 
 import { AppBadge } from '../../../shared/components/AppBadge'
 import { AppButton } from '../../../shared/components/AppButton'
 import { AppInlineErrorAlert } from '../../../shared/components/AppInlineErrorAlert'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { IconCopy, IconPencil, IconSearch, IconTrash } from '@tabler/icons-react'
+import { IconSearch } from '@tabler/icons-react'
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { promptTemplatesApi } from '../../../shared/api/services/promptTemplates.api'
-import type { PromptTemplateKey } from '../../../shared/api/services/promptTemplates.api'
+import type { PromptTemplate, PromptTemplateKey } from '../../../shared/api/services/promptTemplates.api'
 import { ConfirmActionModal } from '../../../shared/components/ConfirmActionModal'
 import { getErrorMessage } from '../../../shared/lib/httpError'
 import { showErrorToast, showSuccessToast, showValidationToast } from '../../../shared/lib/toast'
-import { TEMPLATE_KEYS, TEMPLATE_KEY_LABEL } from '../promptStudio.constants'
-import { PROMPT_TEMPLATES_QUERY_KEY } from '../promptStudio.queryKeys'
-
-type TemplateFilterKey = PromptTemplateKey | 'all'
-
-const extractTemplateVariables = (value: string): string[] =>
-  Array.from(
-    new Set(
-      Array.from(value.matchAll(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g)).map(([, variable]) => variable),
-    ),
-  )
+import { TEMPLATE_KEYS, TEMPLATE_KEY_LABEL } from '../model/promptStudio.constants'
+import { PROMPT_TEMPLATES_QUERY_KEY } from '../model/promptStudio.queryKeys'
+import { PromptTemplateCard } from './PromptTemplateCard'
+import {
+  filterTemplates,
+  getTemplateTypeOptions,
+  type TemplateFilterKey,
+} from '../model/promptTemplates.utils'
 
 export function PromptTemplatesSection() {
   const queryClient = useQueryClient()
@@ -40,11 +37,16 @@ export function PromptTemplatesSection() {
     queryFn: promptTemplatesApi.getPromptTemplates,
   })
 
+  const refreshTemplates = async () => {
+    await queryClient.invalidateQueries({ queryKey: PROMPT_TEMPLATES_QUERY_KEY })
+    await queryClient.refetchQueries({ queryKey: PROMPT_TEMPLATES_QUERY_KEY, type: 'active' })
+  }
+
   const createMutation = useMutation({
     mutationFn: promptTemplatesApi.createPromptTemplate,
-    onSuccess: () => {
+    onSuccess: async () => {
       resetForm()
-      void queryClient.invalidateQueries({ queryKey: PROMPT_TEMPLATES_QUERY_KEY })
+      await refreshTemplates()
       showSuccessToast('Шаблон создан')
     },
     onError: (error) => {
@@ -55,9 +57,9 @@ export function PromptTemplatesSection() {
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof promptTemplatesApi.updatePromptTemplate>[1] }) =>
       promptTemplatesApi.updatePromptTemplate(id, payload),
-    onSuccess: () => {
+    onSuccess: async () => {
       resetForm()
-      void queryClient.invalidateQueries({ queryKey: PROMPT_TEMPLATES_QUERY_KEY })
+      await refreshTemplates()
       showSuccessToast('Шаблон обновлён')
     },
     onError: (error) => {
@@ -67,10 +69,13 @@ export function PromptTemplatesSection() {
 
   const deleteMutation = useMutation({
     mutationFn: promptTemplatesApi.deletePromptTemplate,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: PROMPT_TEMPLATES_QUERY_KEY })
+    onSuccess: async (_, templateId) => {
       if (editingId) {
         resetForm()
+      }
+      await refreshTemplates()
+      if (deleteTarget?.id === templateId) {
+        setDeleteTarget(null)
       }
       showSuccessToast('Шаблон удалён')
     },
@@ -94,7 +99,7 @@ export function PromptTemplatesSection() {
     createMutation.mutate(payload)
   }
 
-  const startEdit = (item: Awaited<ReturnType<typeof promptTemplatesApi.getPromptTemplates>>[number]) => {
+  const startEdit = (item: PromptTemplate) => {
     if (editingId === item.id) {
       resetForm()
       return
@@ -115,40 +120,18 @@ export function PromptTemplatesSection() {
     if (!deleteTarget) {
       return
     }
-    const targetId = deleteTarget.id
-    setDeleteTarget(null)
-    deleteMutation.mutate(targetId)
+    deleteMutation.mutate(deleteTarget.id)
   }
 
   const mutationError = createMutation.error ?? updateMutation.error ?? deleteMutation.error
   const templates = templatesQuery.data ?? []
 
-  const visibleTemplates = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase()
-
-    return templates.filter((item) => {
-      if (filterKey !== 'all' && item.key !== filterKey) {
-        return false
-      }
-
-      if (!normalizedSearch) {
-        return true
-      }
-
-      return (
-        TEMPLATE_KEY_LABEL[item.key].toLowerCase().includes(normalizedSearch) ||
-        item.template.toLowerCase().includes(normalizedSearch)
-      )
-    })
-  }, [filterKey, search, templates])
-
-  const templateTypeOptions = useMemo(
-    () => [
-      { value: 'all', label: 'Все типы' },
-      ...TEMPLATE_KEYS.map((item) => ({ value: item, label: TEMPLATE_KEY_LABEL[item] })),
-    ],
-    [],
+  const visibleTemplates = useMemo(
+    () => filterTemplates(templates, search, filterKey),
+    [filterKey, search, templates],
   )
+
+  const templateTypeOptions = useMemo(() => getTemplateTypeOptions(), [])
 
   const copyTemplateText = async (value: string) => {
     try {
@@ -271,97 +254,24 @@ export function PromptTemplatesSection() {
           ) : (
             <Stack gap="sm">
               {visibleTemplates.map((item) => {
-                const templateVariables = extractTemplateVariables(item.template)
                 const isEditing = editingId === item.id
                 const isExpanded = expandedTemplateIds.includes(item.id)
-                const canExpand = item.template.length > 260
 
                 return (
-                  <Card
+                  <PromptTemplateCard
                     key={item.id}
-                    withBorder
-                    radius="md"
-                    p="sm"
-                    className={isEditing ? 'prompt-template-card prompt-template-card-active' : 'prompt-template-card'}
-                  >
-                    <Stack gap="xs">
-                      <Group justify="space-between" align="flex-start" className="prompt-template-head">
-                        <Stack gap={4} align="flex-start" className="prompt-template-meta">
-                          <AppBadge
-                            color="cyan"
-                            variant={isEditing ? 'filled' : 'light'}
-                            className="prompt-template-key-badge"
-                          >
-                            {TEMPLATE_KEY_LABEL[item.key]}
-                          </AppBadge>
-                          <Text size="xs" c="dimmed">
-                            Переменных: {templateVariables.length} • Символов: {item.template.length}
-                          </Text>
-                        </Stack>
-
-                        <Group gap="xs">
-                          <ActionIcon
-                            variant="light"
-                            color={isEditing ? 'gray' : 'cyan'}
-                            onClick={() => startEdit(item)}
-                          >
-                            <IconPencil size={16} />
-                          </ActionIcon>
-                          <ActionIcon
-                            variant="light"
-                            color="gray"
-                            onClick={() => void copyTemplateText(item.template)}
-                          >
-                            <IconCopy size={16} />
-                          </ActionIcon>
-                          <ActionIcon
-                            variant="light"
-                            color="red"
-                            loading={deleteMutation.isPending}
-                            onClick={() => setDeleteTarget({ id: item.id, label: TEMPLATE_KEY_LABEL[item.key] })}
-                          >
-                            <IconTrash size={16} />
-                          </ActionIcon>
-                        </Group>
-                      </Group>
-
-                      {templateVariables.length ? (
-                        <Group gap={6}>
-                          {templateVariables.map((variable) => (
-                            <AppBadge key={`${item.id}-${variable}`} size="sm" variant="dot" color="blue">
-                              {`{{${variable}}}`}
-                            </AppBadge>
-                          ))}
-                        </Group>
-                      ) : null}
-
-                      <Paper
-                        radius="sm"
-                        p="sm"
-                        className={
-                          isExpanded
-                            ? 'prompt-template-text prompt-template-text-open'
-                            : 'prompt-template-text'
-                        }
-                      >
-                        <Text component="pre" className="prompt-template-text-content">
-                          {item.template}
-                        </Text>
-                      </Paper>
-
-                      {canExpand ? (
-                        <Group justify="flex-end">
-                          <AppButton
-                            size="xs"
-                            variant="subtle"
-                            onClick={() => toggleTemplateExpanded(item.id)}
-                          >
-                            {isExpanded ? 'Свернуть' : 'Показать полностью'}
-                          </AppButton>
-                        </Group>
-                      ) : null}
-                    </Stack>
-                  </Card>
+                    item={item}
+                    isEditing={isEditing}
+                    isExpanded={isExpanded}
+                    isDeletePending={deleteMutation.isPending && deleteMutation.variables === item.id}
+                    isDeleteDisabled={deleteMutation.isPending && deleteMutation.variables !== item.id}
+                    onEdit={startEdit}
+                    onCopy={copyTemplateText}
+                    onDelete={(template) =>
+                      setDeleteTarget({ id: template.id, label: TEMPLATE_KEY_LABEL[template.key] })
+                    }
+                    onToggleExpanded={toggleTemplateExpanded}
+                  />
                 )
               })}
             </Stack>

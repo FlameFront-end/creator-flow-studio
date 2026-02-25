@@ -1,5 +1,6 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { DashboardShell, type AdminView } from '../components/DashboardShell'
+import { type AdminView } from '../../../shared/model/routes'
+import { DashboardShell } from '../components/DashboardShell'
 
 const resolveViewByPathname = (pathname: string): AdminView => {
   if (pathname.startsWith('/dashboard/projects')) return 'projects'

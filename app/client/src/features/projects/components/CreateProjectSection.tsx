@@ -8,8 +8,8 @@ import type { FormEvent } from 'react'
 import { projectsApi } from '../../../shared/api/services/projects.api'
 import { getErrorMessage } from '../../../shared/lib/httpError'
 import { showErrorToast, showSuccessToast, showValidationToast } from '../../../shared/lib/toast'
-import type { EditableProject } from '../ProjectsPage'
-import { PROJECTS_QUERY_KEY } from '../projects.queryKeys'
+import type { EditableProject } from '../pages/projects.page'
+import { PROJECTS_QUERY_KEY } from '../model/projects.queryKeys'
 
 type CreateProjectSectionProps = {
   editingProject: EditableProject | null
@@ -37,12 +37,17 @@ export function CreateProjectSection({
     setDescription('')
   }, [editingProject])
 
+  const refreshProjects = async () => {
+    await queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
+    await queryClient.refetchQueries({ queryKey: PROJECTS_QUERY_KEY, type: 'active' })
+  }
+
   const createProjectMutation = useMutation({
     mutationFn: projectsApi.createProject,
-    onSuccess: () => {
+    onSuccess: async () => {
+      await refreshProjects()
       setName('')
       setDescription('')
-      void queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
       showSuccessToast('Проект создан')
     },
     onError: (error) => {
@@ -53,8 +58,8 @@ export function CreateProjectSection({
   const updateProjectMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof projectsApi.updateProject>[1] }) =>
       projectsApi.updateProject(id, payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
+    onSuccess: async () => {
+      await refreshProjects()
       showSuccessToast('Проект обновлён')
       onDoneEdit()
     },

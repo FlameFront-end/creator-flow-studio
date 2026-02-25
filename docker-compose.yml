@@ -4,15 +4,15 @@ services:
     container_name: ai_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ai_influencer
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 2004
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=ai_influencer
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_influencer"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-ai_influencer}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -22,7 +22,7 @@ services:
     container_name: ai_redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -46,7 +46,9 @@ services:
       - ./app/server/.env
     environment:
       DB_HOST: postgres
+      DB_PORT: 5432
       REDIS_HOST: redis
+      REDIS_PORT: 6379
     ports:
       - "3000:3000"
 
@@ -68,7 +70,9 @@ services:
       - ./app/server/.env
     environment:
       DB_HOST: postgres
+      DB_PORT: 5432
       REDIS_HOST: redis
+      REDIS_PORT: 6379
 
   client:
     build:

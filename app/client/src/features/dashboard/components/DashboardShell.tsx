@@ -1,10 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { clearAuthToken } from '../../../shared/lib/auth'
-import { ROUTES } from '../../../shared/model/routes'
+import { ROUTES, type AdminView } from '../../../shared/model/routes'
 import { DashboardHero } from './DashboardHero'
-
-export type AdminView = 'projects' | 'prompt-studio' | 'ideas-lab'
 
 const viewRouteMap: Record<AdminView, string> = {
   projects: ROUTES.DASHBOARD_PROJECTS,

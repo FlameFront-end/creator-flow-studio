@@ -1,0 +1,112 @@
+.prompt-templates-layout,
+.prompt-preview-quick-grid {
+  align-items: start;
+}
+
+.prompt-templates-editor {
+  position: sticky;
+  top: 14px;
+}
+
+.prompt-template-card {
+  background: rgba(14, 14, 14, 0.9);
+  border-color: rgba(255, 255, 255, 0.12);
+
+  &.prompt-template-card-active {
+    border-color: rgba(255, 255, 255, 0.24);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+  }
+}
+
+.prompt-template-head {
+  gap: 10px;
+}
+
+.prompt-template-meta {
+  min-width: 0;
+}
+
+.prompt-template-key-badge {
+  align-self: flex-start;
+  width: auto;
+}
+
+.prompt-template-text {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(12, 12, 12, 0.72);
+  max-height: 120px;
+  overflow: hidden;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 34px;
+    background: linear-gradient(180deg, rgba(12, 12, 12, 0), rgba(12, 12, 12, 0.95));
+    pointer-events: none;
+  }
+
+  &.prompt-template-text-open {
+    max-height: none;
+
+    &::after {
+      display: none;
+    }
+  }
+}
+
+.prompt-template-text-content {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  color: #e4e4e7;
+  font-size: 0.93rem;
+  line-height: 1.45;
+}
+
+.prompt-preview-quick-actions {
+  margin-top: 2px;
+
+  .appui-Button-root {
+    min-width: 180px;
+  }
+}
+
+:root[data-color-scheme='light'] {
+  .prompt-template-card {
+    background: rgba(248, 250, 252, 0.95);
+    border-color: rgba(148, 163, 184, 0.42);
+
+    &.prompt-template-card-active {
+      border-color: rgba(14, 165, 233, 0.58);
+      box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.18);
+    }
+  }
+
+  .prompt-template-text {
+    border-color: rgba(14, 165, 233, 0.22);
+    background: rgba(241, 245, 249, 0.9);
+
+    &::after {
+      background: linear-gradient(180deg, rgba(241, 245, 249, 0), rgba(241, 245, 249, 0.98));
+    }
+  }
+
+  .prompt-template-text-content {
+    color: #1e293b;
+  }
+}
+
+@media (max-width: 75em) {
+  .prompt-templates-editor {
+    position: static;
+  }
+
+  .prompt-preview-quick-actions .appui-Button-root {
+    width: 100%;
+  }
+}

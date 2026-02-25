@@ -1,9 +1,15 @@
 import { Navigate, createBrowserRouter } from 'react-router-dom'
 import { AppRoutes } from '../components/AppRoutes'
 import { lazyImport } from '../../shared/lib/lazyImport'
-import { buildIdeasLabRoute, buildPromptStudioRoute, ROUTES } from '../../shared/model/routes'
-import ErrorPage from '../../features/error/ErrorPage'
-import NotFoundPage from '../../features/not-found/NotFoundPage'
+import {
+  buildIdeasLabRoute,
+  buildPromptStudioRoute,
+  DASHBOARD_CHILD_PATHS,
+  ROUTE_PATHS,
+  ROUTES,
+} from '../../shared/model/routes'
+import ErrorPage from '../../features/error/pages/error.page'
+import NotFoundPage from '../../features/not-found/pages/not-found.page'
 
 export const router = createBrowserRouter([
   {
@@ -11,7 +17,7 @@ export const router = createBrowserRouter([
     element: <AppRoutes />,
     children: [
       {
-        path: '/',
+        path: ROUTE_PATHS.ROOT,
         element: <Navigate to={ROUTES.HOME} replace />,
       },
       {
@@ -23,44 +29,59 @@ export const router = createBrowserRouter([
         element: <Navigate to={ROUTES.DASHBOARD_PROJECTS} replace />,
       },
       {
-        path: '/dashboard',
+        path: ROUTES.HOME,
         lazy: () => lazyImport(() => import('../../features/dashboard/pages/dashboard-layout.page')),
         children: [
           {
-            path: 'projects',
-            lazy: () => lazyImport(() => import('../../features/dashboard/pages/dashboard-projects.page')),
+            path: DASHBOARD_CHILD_PATHS.PROJECTS,
+            lazy: () =>
+              lazyImport(() =>
+                import('../../features/projects/pages/projects.page').then((module) => ({
+                  default: module.ProjectsPage,
+                })),
+              ),
           },
           {
-            path: 'prompt-studio',
+            path: DASHBOARD_CHILD_PATHS.PROMPT_STUDIO,
             element: <Navigate to={buildPromptStudioRoute('personas')} replace />,
           },
           {
-            path: 'prompt-studio/:workspace',
-            lazy: () => lazyImport(() => import('../../features/dashboard/pages/dashboard-prompt-studio.page')),
+            path: DASHBOARD_CHILD_PATHS.PROMPT_STUDIO_WORKSPACE,
+            lazy: () =>
+              lazyImport(() =>
+                import('../../features/prompt-studio/pages/prompt-studio.page').then((module) => ({
+                  default: module.PromptStudioPage,
+                })),
+              ),
           },
           {
-            path: 'ideas-lab',
+            path: DASHBOARD_CHILD_PATHS.IDEAS_LAB,
             element: <Navigate to={buildIdeasLabRoute('brief')} replace />,
           },
           {
-            path: 'ideas-lab/:workspace',
-            lazy: () => lazyImport(() => import('../../features/dashboard/pages/dashboard.page')),
+            path: DASHBOARD_CHILD_PATHS.IDEAS_LAB_WORKSPACE,
+            lazy: () =>
+              lazyImport(() =>
+                import('../../features/ideas-lab/pages/ideas-lab.page').then((module) => ({
+                  default: module.IdeasLabPage,
+                })),
+              ),
           },
         ],
       },
       {
         path: ROUTES.ABOUT,
-        lazy: () => lazyImport(() => import('../../features/about/AboutPage')),
+        lazy: () => lazyImport(() => import('../../features/about/pages/about.page')),
       },
       {
         path: ROUTES.POST_DRAFT_EXPORT,
         lazy: () =>
           lazyImport(
-            () => import('../../features/post-drafts/PostDraftExportPage'),
+            () => import('../../features/post-drafts/pages/post-draft-export.page'),
           ),
       },
       {
-        path: '*',
+        path: ROUTE_PATHS.WILDCARD,
         element: <NotFoundPage />,
       },
     ],

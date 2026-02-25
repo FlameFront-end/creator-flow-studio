@@ -1,5 +1,6 @@
 ﻿import { Group, Paper, Stack, Text, Title } from '@ui/core'
 import { AppButton } from '../../shared/components/AppButton'
+import { ROUTES } from '../../shared/model/routes'
 import { Component } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 
@@ -32,7 +33,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   private handleGoHome = () => {
-    window.location.href = '/dashboard'
+    window.location.assign(ROUTES.HOME)
   }
 
   render() {

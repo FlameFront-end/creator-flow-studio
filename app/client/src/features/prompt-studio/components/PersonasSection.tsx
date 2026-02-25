@@ -11,7 +11,7 @@ import { AppTable } from '../../../shared/components/AppTable'
 import { ConfirmActionModal } from '../../../shared/components/ConfirmActionModal'
 import { getErrorMessage } from '../../../shared/lib/httpError'
 import { showErrorToast, showSuccessToast, showValidationToast } from '../../../shared/lib/toast'
-import { PERSONAS_QUERY_KEY } from '../promptStudio.queryKeys'
+import { PERSONAS_QUERY_KEY } from '../model/promptStudio.queryKeys'
 
 export function PersonasSection() {
   const queryClient = useQueryClient()
@@ -29,11 +29,16 @@ export function PersonasSection() {
     queryFn: personasApi.getPersonas,
   })
 
+  const refreshPersonas = async () => {
+    await queryClient.invalidateQueries({ queryKey: PERSONAS_QUERY_KEY })
+    await queryClient.refetchQueries({ queryKey: PERSONAS_QUERY_KEY, type: 'active' })
+  }
+
   const createMutation = useMutation({
     mutationFn: personasApi.createPersona,
-    onSuccess: () => {
+    onSuccess: async () => {
       resetForm()
-      void queryClient.invalidateQueries({ queryKey: PERSONAS_QUERY_KEY })
+      await refreshPersonas()
       showSuccessToast('Персонаж создан')
     },
     onError: (error) => {
@@ -44,9 +49,9 @@ export function PersonasSection() {
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof personasApi.updatePersona>[1] }) =>
       personasApi.updatePersona(id, payload),
-    onSuccess: () => {
+    onSuccess: async () => {
       resetForm()
-      void queryClient.invalidateQueries({ queryKey: PERSONAS_QUERY_KEY })
+      await refreshPersonas()
       showSuccessToast('Персонаж обновлён')
     },
     onError: (error) => {
@@ -56,10 +61,13 @@ export function PersonasSection() {
 
   const deleteMutation = useMutation({
     mutationFn: personasApi.deletePersona,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: PERSONAS_QUERY_KEY })
+    onSuccess: async (_, personaId) => {
       if (editingId) {
         resetForm()
+      }
+      await refreshPersonas()
+      if (deleteTarget?.id === personaId) {
+        setDeleteTarget(null)
       }
       showSuccessToast('Персонаж удалён')
     },
@@ -121,9 +129,7 @@ export function PersonasSection() {
     if (!deleteTarget) {
       return
     }
-    const targetId = deleteTarget.id
-    setDeleteTarget(null)
-    deleteMutation.mutate(targetId)
+    deleteMutation.mutate(deleteTarget.id)
   }
 
   const mutationError = createMutation.error ?? updateMutation.error ?? deleteMutation.error
@@ -224,28 +230,34 @@ export function PersonasSection() {
             </AppTable.Tr>
           </AppTable.Thead>
           <AppTable.Tbody>
-            {personasQuery.data.map((persona) => (
-              <AppTable.Tr key={persona.id}>
-                <AppTable.Td>{persona.name}</AppTable.Td>
-                <AppTable.Td>{persona.age ?? '-'}</AppTable.Td>
-                <AppTable.Td>{persona.archetypeTone ?? '-'}</AppTable.Td>
-                <AppTable.Td>
-                  <Group gap="xs">
-                    <ActionIcon variant="light" color="cyan" onClick={() => startEdit(persona)}>
-                      <IconPencil size={16} />
-                    </ActionIcon>
-                    <ActionIcon
-                      variant="light"
-                      color="red"
-                      loading={deleteMutation.isPending}
-                      onClick={() => setDeleteTarget({ id: persona.id, name: persona.name })}
-                    >
-                      <IconTrash size={16} />
-                    </ActionIcon>
-                  </Group>
-                </AppTable.Td>
-              </AppTable.Tr>
-            ))}
+            {personasQuery.data.map((persona) => {
+              const isDeletingThisPersona =
+                deleteMutation.isPending && deleteMutation.variables === persona.id
+
+              return (
+                <AppTable.Tr key={persona.id}>
+                  <AppTable.Td>{persona.name}</AppTable.Td>
+                  <AppTable.Td>{persona.age ?? '-'}</AppTable.Td>
+                  <AppTable.Td>{persona.archetypeTone ?? '-'}</AppTable.Td>
+                  <AppTable.Td>
+                    <Group gap="xs">
+                      <ActionIcon variant="light" color="cyan" onClick={() => startEdit(persona)}>
+                        <IconPencil size={16} />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant="light"
+                        color="red"
+                        loading={isDeletingThisPersona}
+                        disabled={deleteMutation.isPending && !isDeletingThisPersona}
+                        onClick={() => setDeleteTarget({ id: persona.id, name: persona.name })}
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    </Group>
+                  </AppTable.Td>
+                </AppTable.Tr>
+              )
+            })}
           </AppTable.Tbody>
         </AppTable>
       )}

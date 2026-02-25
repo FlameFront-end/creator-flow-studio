@@ -9,7 +9,6 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { type IdeaDetails } from '../../../shared/api/services/ideas.api'
 import {
   postDraftsApi,
-  type ModerationCheckItem,
   type PostDraftExport,
 } from '../../../shared/api/services/postDrafts.api'
 import { formatRuDateTime } from '../../../shared/lib/formatters'
@@ -17,140 +16,24 @@ import { showErrorToast, showSuccessToast, showValidationToast } from '../../../
 import { buildPostDraftExportRoute } from '../../../shared/model/routes'
 import type { IdeasLabIdea } from '../hooks/useIdeasLabController'
 import { formatAssetTypeLabel, resolveAssetUrl } from '../lib/ideasLab.formatters'
-import { AssetViewerModal, type AssetViewerPayload } from './AssetViewerModal'
+import { postDraftLatestQueryKey } from '../model/ideasLab.constants'
+import {
+  buildTextPreview,
+  defaultAssetIds,
+  formatCheckResult,
+  formatDraftStatusLabel,
+  formatModerationStatusLabel,
+  localDatetimeToRuParts,
+  postDraftModerationColor,
+  postDraftStatusColor,
+  ruPartsToLocalDatetime,
+  toLocalDatetime,
+} from '../model/postDraftPanel.utils'
+import { AssetViewerModal, type AssetViewerPayload } from '../../../shared/components/AssetViewerModal'
 
 type PostDraftPanelProps = {
   selectedIdea: IdeasLabIdea
   details: IdeaDetails | undefined
-}
-
-const statusColor: Record<string, string> = {
-  draft: 'gray',
-  approved: 'green',
-  published: 'cyan',
-  archived: 'dark',
-}
-
-const moderationColor: Record<string, string> = {
-  passed: 'green',
-  failed: 'red',
-}
-
-const formatDraftStatusLabel = (status: string): string => {
-  switch (status) {
-    case 'draft':
-      return 'Черновик'
-    case 'approved':
-      return 'Подтвержден'
-    case 'published':
-      return 'Опубликован'
-    case 'archived':
-      return 'В архиве'
-    default:
-      return status
-  }
-}
-
-const formatModerationStatusLabel = (status: string): string => {
-  switch (status) {
-    case 'passed':
-      return 'Пройдена'
-    case 'failed':
-      return 'Не пройдена'
-    default:
-      return status
-  }
-}
-
-const toLocalDatetime = (value: string | null): string => {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 16)
-}
-
-const localDatetimeToRuParts = (value: string): { date: string; time: string } => {
-  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) {
-    return { date: '', time: '' }
-  }
-
-  const [datePart, timePart] = value.split('T')
-  const [year, month, day] = datePart.split('-')
-  return {
-    date: `${day}.${month}.${year}`,
-    time: timePart,
-  }
-}
-
-const ruPartsToLocalDatetime = (dateRu: string, timeRu: string): string => {
-  const dateMatch = dateRu.match(/^(\d{2})\.(\d{2})\.(\d{4})$/)
-  const timeMatch = timeRu.match(/^(\d{2}):(\d{2})$/)
-  if (!dateMatch || !timeMatch) return ''
-
-  const [, day, month, year] = dateMatch
-  const [, hours, minutes] = timeMatch
-
-  const dayNumber = Number(day)
-  const monthNumber = Number(month)
-  const yearNumber = Number(year)
-  const hoursNumber = Number(hours)
-  const minutesNumber = Number(minutes)
-
-  if (
-    monthNumber < 1 ||
-    monthNumber > 12 ||
-    dayNumber < 1 ||
-    dayNumber > 31 ||
-    hoursNumber < 0 ||
-    hoursNumber > 23 ||
-    minutesNumber < 0 ||
-    minutesNumber > 59
-  ) {
-    return ''
-  }
-
-  const candidate = new Date(Date.UTC(yearNumber, monthNumber - 1, dayNumber, hoursNumber, minutesNumber))
-  if (
-    candidate.getUTCFullYear() !== yearNumber ||
-    candidate.getUTCMonth() + 1 !== monthNumber ||
-    candidate.getUTCDate() !== dayNumber
-  ) {
-    return ''
-  }
-
-  return `${year}-${month}-${day}T${hours}:${minutes}`
-}
-
-const defaultAssetIds = (details: IdeaDetails | undefined): string[] => {
-  const succeededAssets =
-    details?.assets.filter(
-      (asset) =>
-        asset.status === 'succeeded' &&
-        (asset.type === 'image' || asset.type === 'video'),
-    ) ?? []
-
-  const latestVideo = succeededAssets.find((asset) => asset.type === 'video')
-  const latestImage = succeededAssets.find((asset) => asset.type === 'image')
-
-  const selected: string[] = []
-  if (latestVideo) selected.push(latestVideo.id)
-  if (latestImage && !selected.includes(latestImage.id)) selected.push(latestImage.id)
-  if (!selected.length && succeededAssets[0]) selected.push(succeededAssets[0].id)
-  return selected
-}
-
-const formatCheckResult = (check: ModerationCheckItem): string => {
-  if (check.passed) return 'Ок'
-  if (!check.hits.length) return 'Ошибка'
-  return `Ошибка: ${check.hits.join(', ')}`
-}
-
-const buildTextPreview = (value: string | null | undefined, maxLength = 96): string => {
-  const compact = (value ?? '').replace(/\s+/g, ' ').trim()
-  if (!compact) return 'Без текста'
-  if (compact.length <= maxLength) return compact
-  return `${compact.slice(0, maxLength - 1)}…`
 }
 
 export const PostDraftPanel = ({ selectedIdea, details }: PostDraftPanelProps) => {
@@ -172,13 +55,14 @@ export const PostDraftPanel = ({ selectedIdea, details }: PostDraftPanelProps) =
   )
 
   const latestDraftQuery = useQuery({
-    queryKey: ['post-draft-latest', selectedIdea.id],
+    queryKey: postDraftLatestQueryKey(selectedIdea.id),
     queryFn: () => postDraftsApi.getLatestByIdea(selectedIdea.id),
     enabled: Boolean(selectedIdea.id),
   })
 
-  const refreshLatestDraft = () => {
-    void queryClient.invalidateQueries({ queryKey: ['post-draft-latest', selectedIdea.id] })
+  const refreshLatestDraft = async () => {
+    await queryClient.invalidateQueries({ queryKey: postDraftLatestQueryKey(selectedIdea.id) })
+    await queryClient.refetchQueries({ queryKey: postDraftLatestQueryKey(selectedIdea.id), type: 'active' })
   }
 
   useEffect(() => {
@@ -247,9 +131,9 @@ export const PostDraftPanel = ({ selectedIdea, details }: PostDraftPanelProps) =
         assetIds: selectedAssetIds,
         scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
       }),
-    onSuccess: (createdDraft) => {
+    onSuccess: async (createdDraft) => {
       setDraft(createdDraft)
-      refreshLatestDraft()
+      await refreshLatestDraft()
       showSuccessToast('Черновик публикации собран')
     },
     onError: (error) => showErrorToast(error, 'Не удалось собрать черновик'),
@@ -262,9 +146,9 @@ export const PostDraftPanel = ({ selectedIdea, details }: PostDraftPanelProps) =
       }
       return postDraftsApi.runModeration(draft.id)
     },
-    onSuccess: (updatedDraft) => {
+    onSuccess: async (updatedDraft) => {
       setDraft(updatedDraft)
-      refreshLatestDraft()
+      await refreshLatestDraft()
       showSuccessToast('Проверки модерации завершены')
     },
     onError: (error) => showErrorToast(error, 'Не удалось выполнить проверки модерации'),
@@ -279,9 +163,9 @@ export const PostDraftPanel = ({ selectedIdea, details }: PostDraftPanelProps) =
         overrideReason: overrideReason.trim() || undefined,
       })
     },
-    onSuccess: (updatedDraft) => {
+    onSuccess: async (updatedDraft) => {
       setDraft(updatedDraft)
-      refreshLatestDraft()
+      await refreshLatestDraft()
       showSuccessToast('Черновик подтвержден')
     },
     onError: (error) => showErrorToast(error, 'Не удалось подтвердить черновик'),
@@ -294,9 +178,9 @@ export const PostDraftPanel = ({ selectedIdea, details }: PostDraftPanelProps) =
       }
       return postDraftsApi.markPublished(draft.id)
     },
-    onSuccess: (updatedDraft) => {
+    onSuccess: async (updatedDraft) => {
       setDraft(updatedDraft)
-      refreshLatestDraft()
+      await refreshLatestDraft()
       showSuccessToast('Пост отмечен как опубликованный вручную')
     },
     onError: (error) => showErrorToast(error, 'Не удалось отметить публикацию'),
@@ -309,9 +193,9 @@ export const PostDraftPanel = ({ selectedIdea, details }: PostDraftPanelProps) =
       }
       return postDraftsApi.unapprove(draft.id)
     },
-    onSuccess: (updatedDraft) => {
+    onSuccess: async (updatedDraft) => {
       setDraft(updatedDraft)
-      refreshLatestDraft()
+      await refreshLatestDraft()
       showSuccessToast('Подтверждение снято')
     },
     onError: (error) => showErrorToast(error, 'Не удалось снять подтверждение'),
@@ -373,7 +257,7 @@ export const PostDraftPanel = ({ selectedIdea, details }: PostDraftPanelProps) =
         <Group justify="space-between" align="center">
           <Title order={5}>Пакет публикации</Title>
           {draft ? (
-            <AppBadge color={statusColor[draft.status] ?? 'gray'}>{formatDraftStatusLabel(draft.status)}</AppBadge>
+            <AppBadge color={postDraftStatusColor[draft.status] ?? 'gray'}>{formatDraftStatusLabel(draft.status)}</AppBadge>
           ) : (
             <AppBadge variant="light">Черновик не создан</AppBadge>
           )}
@@ -501,7 +385,7 @@ export const PostDraftPanel = ({ selectedIdea, details }: PostDraftPanelProps) =
                   <Text size="sm" fw={600}>
                     Состояние черновика
                   </Text>
-                  <AppBadge color={statusColor[draft.status] ?? 'gray'} variant="light">
+                  <AppBadge color={postDraftStatusColor[draft.status] ?? 'gray'} variant="light">
                     {formatDraftStatusLabel(draft.status)}
                   </AppBadge>
                 </Group>
@@ -514,7 +398,7 @@ export const PostDraftPanel = ({ selectedIdea, details }: PostDraftPanelProps) =
                     <>
                       <Text size="sm" c="dimmed">•</Text>
                       <Text size="sm" c="dimmed">Проверки:</Text>
-                      <AppBadge color={moderationColor[latestModeration.status] ?? 'gray'}>
+                      <AppBadge color={postDraftModerationColor[latestModeration.status] ?? 'gray'}>
                         {formatModerationStatusLabel(latestModeration.status)}
                       </AppBadge>
                     </>

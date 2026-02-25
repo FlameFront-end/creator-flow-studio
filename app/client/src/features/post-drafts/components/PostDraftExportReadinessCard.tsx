@@ -42,7 +42,7 @@ export const PostDraftExportReadinessCard = ({
   <Card withBorder radius="md" p="md" className="inner-surface post-export-card">
     <Stack gap="sm">
       <Group justify="space-between" align="center">
-        <Title order={4}>Готовность Рє публикации</Title>
+        <Title order={4}>Готовность к публикации</Title>
         <AppBadge color={canMarkPublished ? 'green' : 'gray'}>
           {canMarkPublished ? 'Можно публиковать' : 'Требуются шаги'}
         </AppBadge>
@@ -94,7 +94,7 @@ export const PostDraftExportReadinessCard = ({
           Отметить как опубликовано вручную
         </AppButton>
         <AppButton variant="default" onClick={onBack}>
-          Вернуться Рє идее
+          Вернуться к идее
         </AppButton>
       </Group>
     </Stack>

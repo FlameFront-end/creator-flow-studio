@@ -14,7 +14,7 @@ import { AppTable } from '../../../shared/components/AppTable'
 import { ConfirmActionModal } from '../../../shared/components/ConfirmActionModal'
 import { getErrorMessage } from '../../../shared/lib/httpError'
 import { showErrorToast, showSuccessToast, showValidationToast } from '../../../shared/lib/toast'
-import { POLICY_RULES_QUERY_KEY } from '../promptStudio.queryKeys'
+import { POLICY_RULES_QUERY_KEY } from '../model/promptStudio.queryKeys'
 
 export function PolicyRulesSection() {
   const queryClient = useQueryClient()
@@ -29,11 +29,16 @@ export function PolicyRulesSection() {
     queryFn: policyRulesApi.getPolicyRules,
   })
 
+  const refreshPolicyRules = async () => {
+    await queryClient.invalidateQueries({ queryKey: POLICY_RULES_QUERY_KEY })
+    await queryClient.refetchQueries({ queryKey: POLICY_RULES_QUERY_KEY, type: 'active' })
+  }
+
   const createMutation = useMutation({
     mutationFn: policyRulesApi.createPolicyRule,
-    onSuccess: () => {
+    onSuccess: async () => {
       resetForm()
-      void queryClient.invalidateQueries({ queryKey: POLICY_RULES_QUERY_KEY })
+      await refreshPolicyRules()
       showSuccessToast('Правило создано')
     },
     onError: (error) => {
@@ -44,9 +49,9 @@ export function PolicyRulesSection() {
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof policyRulesApi.updatePolicyRule>[1] }) =>
       policyRulesApi.updatePolicyRule(id, payload),
-    onSuccess: () => {
+    onSuccess: async () => {
       resetForm()
-      void queryClient.invalidateQueries({ queryKey: POLICY_RULES_QUERY_KEY })
+      await refreshPolicyRules()
       showSuccessToast('Правило обновлено')
     },
     onError: (error) => {
@@ -56,10 +61,13 @@ export function PolicyRulesSection() {
 
   const deleteMutation = useMutation({
     mutationFn: policyRulesApi.deletePolicyRule,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: POLICY_RULES_QUERY_KEY })
+    onSuccess: async (_, ruleId) => {
       if (editingId) {
         resetForm()
+      }
+      await refreshPolicyRules()
+      if (deleteTarget?.id === ruleId) {
+        setDeleteTarget(null)
       }
       showSuccessToast('Правило удалено')
     },
@@ -106,9 +114,7 @@ export function PolicyRulesSection() {
     if (!deleteTarget) {
       return
     }
-    const targetId = deleteTarget.id
-    setDeleteTarget(null)
-    deleteMutation.mutate(targetId)
+    deleteMutation.mutate(deleteTarget.id)
   }
 
   const mutationError = createMutation.error ?? updateMutation.error ?? deleteMutation.error
@@ -194,32 +200,37 @@ export function PolicyRulesSection() {
             </AppTable.Tr>
           </AppTable.Thead>
           <AppTable.Tbody>
-            {rulesQuery.data.map((rule) => (
-              <AppTable.Tr key={rule.id}>
-                <AppTable.Td>
-                  <AppBadge color={rule.type === 'DONT' ? 'red' : 'green'}>
-                    {rule.type === 'DO' ? 'Рекомендация' : 'Ограничение'}
-                  </AppBadge>
-                </AppTable.Td>
-                <AppTable.Td>{rule.severity === 'hard' ? 'Строгое' : 'Гибкое'}</AppTable.Td>
-                <AppTable.Td>{rule.text}</AppTable.Td>
-                <AppTable.Td>
-                  <Group gap="xs">
-                    <ActionIcon variant="light" color="cyan" onClick={() => startEdit(rule)}>
-                      <IconPencil size={16} />
-                    </ActionIcon>
-                    <ActionIcon
-                      variant="light"
-                      color="red"
-                      loading={deleteMutation.isPending}
-                      onClick={() => setDeleteTarget({ id: rule.id, text: rule.text })}
-                    >
-                      <IconTrash size={16} />
-                    </ActionIcon>
-                  </Group>
-                </AppTable.Td>
-              </AppTable.Tr>
-            ))}
+            {rulesQuery.data.map((rule) => {
+              const isDeletingThisRule = deleteMutation.isPending && deleteMutation.variables === rule.id
+
+              return (
+                <AppTable.Tr key={rule.id}>
+                  <AppTable.Td>
+                    <AppBadge color={rule.type === 'DONT' ? 'red' : 'green'}>
+                      {rule.type === 'DO' ? 'Рекомендация' : 'Ограничение'}
+                    </AppBadge>
+                  </AppTable.Td>
+                  <AppTable.Td>{rule.severity === 'hard' ? 'Строгое' : 'Гибкое'}</AppTable.Td>
+                  <AppTable.Td>{rule.text}</AppTable.Td>
+                  <AppTable.Td>
+                    <Group gap="xs">
+                      <ActionIcon variant="light" color="cyan" onClick={() => startEdit(rule)}>
+                        <IconPencil size={16} />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant="light"
+                        color="red"
+                        loading={isDeletingThisRule}
+                        disabled={deleteMutation.isPending && !isDeletingThisRule}
+                        onClick={() => setDeleteTarget({ id: rule.id, text: rule.text })}
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    </Group>
+                  </AppTable.Td>
+                </AppTable.Tr>
+              )
+            })}
           </AppTable.Tbody>
         </AppTable>
       )}

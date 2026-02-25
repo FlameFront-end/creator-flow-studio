@@ -12,9 +12,9 @@ import { AppInlineErrorAlert } from '../../../shared/components/AppInlineErrorAl
 import { AppTable } from '../../../shared/components/AppTable'
 import { getErrorMessage } from '../../../shared/lib/httpError'
 import { showErrorToast, showSuccessToast } from '../../../shared/lib/toast'
-import { TEMPLATE_KEYS, TEMPLATE_KEY_LABEL } from '../promptStudio.constants'
-import type { PreviewVariableType } from '../promptStudio.constants'
-import { PERSONAS_QUERY_KEY, PROMPT_TEMPLATES_QUERY_KEY } from '../promptStudio.queryKeys'
+import { TEMPLATE_KEYS, TEMPLATE_KEY_LABEL } from '../model/promptStudio.constants'
+import type { PreviewVariableType } from '../model/promptStudio.constants'
+import { PERSONAS_QUERY_KEY, PROMPT_TEMPLATES_QUERY_KEY } from '../model/promptStudio.queryKeys'
 
 export function PromptPreviewSection() {
   const personasQuery = useQuery({

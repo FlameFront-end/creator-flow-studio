@@ -7,8 +7,8 @@ import { AppTable } from '../../../shared/components/AppTable'
 import { ConfirmActionModal } from '../../../shared/components/ConfirmActionModal'
 import { getErrorMessage } from '../../../shared/lib/httpError'
 import { showErrorToast, showSuccessToast } from '../../../shared/lib/toast'
-import type { EditableProject } from '../ProjectsPage'
-import { PROJECTS_QUERY_KEY } from '../projects.queryKeys'
+import type { EditableProject } from '../pages/projects.page'
+import { PROJECTS_QUERY_KEY } from '../model/projects.queryKeys'
 import { useState } from 'react'
 
 type ProjectsListSectionProps = {
@@ -34,8 +34,10 @@ export function ProjectsListSection({
 
   const deleteMutation = useMutation({
     mutationFn: projectsApi.deleteProject,
-    onSuccess: (_, projectId) => {
-      void queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
+    onSuccess: async (_, projectId) => {
+      await queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
+      await queryClient.refetchQueries({ queryKey: PROJECTS_QUERY_KEY, type: 'active' })
+      setDeleteTarget(null)
       onDeletedProject(projectId)
       showSuccessToast('Проект удалён')
     },
@@ -48,9 +50,7 @@ export function ProjectsListSection({
     if (!deleteTarget) {
       return
     }
-    const targetId = deleteTarget.id
-    setDeleteTarget(null)
-    deleteMutation.mutate(targetId)
+    deleteMutation.mutate(deleteTarget.id)
   }
 
   return (
@@ -92,6 +92,8 @@ export function ProjectsListSection({
               <AppTable.Tbody>
                 {projectsQuery.data.map((project) => {
                   const isEditing = editingProjectId === project.id
+                  const isDeletingThisProject =
+                    deleteMutation.isPending && deleteMutation.variables === project.id
 
                   return (
                     <AppTable.Tr key={project.id}>
@@ -122,7 +124,8 @@ export function ProjectsListSection({
                           <ActionIcon
                             variant="light"
                             color="red"
-                            loading={deleteMutation.isPending}
+                            loading={isDeletingThisProject}
+                            disabled={deleteMutation.isPending && !isDeletingThisProject}
                             onClick={() => {
                               setDeleteTarget({ id: project.id, name: project.name })
                             }}
