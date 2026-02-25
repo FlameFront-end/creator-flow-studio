@@ -3,11 +3,12 @@ import { Group, Paper, Stack, Textarea, TextInput, Title } from '@ui/core'
 import { AppInlineErrorAlert } from '../../../shared/components/AppInlineErrorAlert'
 import { AppButton } from '../../../shared/components/AppButton'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { projectsApi } from '../../../shared/api/services/projects.api'
 import { getErrorMessage } from '../../../shared/lib/httpError'
-import { showErrorToast, showSuccessToast, showValidationToast } from '../../../shared/lib/toast'
+import { showErrorToast, showSuccessToast } from '../../../shared/lib/toast'
+import { useFormErrors } from '../../../shared/lib/useFormErrors'
 import type { EditableProject } from '../pages/projects.page'
 import { PROJECTS_QUERY_KEY } from '../model/projects.queryKeys'
 
@@ -25,17 +26,21 @@ export function CreateProjectSection({
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const nameInputRef = useRef<HTMLInputElement>(null)
+  const { errors, setErrors, clearError, clearAll, getFirstErrorField } = useFormErrors<'name'>()
 
   useEffect(() => {
     if (editingProject) {
       setName(editingProject.name)
       setDescription(editingProject.description ?? '')
+      clearAll()
       return
     }
 
     setName('')
     setDescription('')
-  }, [editingProject])
+    clearAll()
+  }, [clearAll, editingProject])
 
   const refreshProjects = async () => {
     await queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
@@ -70,13 +75,23 @@ export function CreateProjectSection({
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (name.trim().length < 2) {
-      showValidationToast('Название проекта должно быть не короче 2 символов')
-      return
-    }
-
     const nextName = name.trim()
     const nextDescription = description.trim()
+    const nextErrors: Partial<Record<'name', string>> = {}
+
+    if (nextName.length < 2) {
+      nextErrors.name = 'Название проекта должно быть не короче 2 символов'
+    }
+
+    setErrors(nextErrors)
+
+    if (Object.keys(nextErrors).length > 0) {
+      const firstErrorField = (Object.keys(nextErrors)[0] ?? getFirstErrorField()) as 'name' | null
+      if (firstErrorField === 'name') {
+        nameInputRef.current?.focus()
+      }
+      return
+    }
 
     if (editingProject) {
       const originalName = editingProject.name.trim()
@@ -113,15 +128,23 @@ export function CreateProjectSection({
       <Stack gap="md">
         <Title order={3}>{isEditing ? 'Изменить проект' : 'Создать проект'}</Title>
 
-        <form onSubmit={onSubmit}>
+        <form onSubmit={onSubmit} noValidate>
           <Stack gap="sm">
             <TextInput
-              label="Название"
+              ref={nameInputRef}
+              label={<span style={{ color: errors.name ? 'rgba(248, 113, 113, 0.9)' : undefined }}>Название</span>}
               value={name}
-              onChange={(event) => setName(event.currentTarget.value)}
+              onChange={(event) => {
+                const nextValue = event.currentTarget.value
+                setName(nextValue)
+                if (nextValue.trim().length >= 2) {
+                  clearError('name')
+                }
+              }}
               minLength={2}
               maxLength={120}
               required
+              error={errors.name}
             />
             <Textarea
               label="Описание"

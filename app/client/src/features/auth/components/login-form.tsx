@@ -1,11 +1,10 @@
 import { useMutation } from '@tanstack/react-query'
-import { TextInput } from '@ui/core'
+import { ActionIcon, TextInput } from '@ui/core'
+import { IconEye, IconEyeOff } from '@tabler/icons-react'
 import { useState, type FormEvent } from 'react'
 import { authApi } from '../../../shared/api/services/auth.api'
 import { AppButton } from '../../../shared/components/AppButton'
-import { AppInlineErrorAlert } from '../../../shared/components/AppInlineErrorAlert'
 import { setAuthToken } from '../../../shared/lib/auth'
-import { getErrorMessage } from '../../../shared/lib/httpError'
 import {
   showErrorToast,
   showSuccessToast,
@@ -14,6 +13,7 @@ import {
 
 export function LoginForm() {
   const [password, setPassword] = useState('admin-password')
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false)
 
   const loginMutation = useMutation({
     mutationFn: authApi.login,
@@ -43,30 +43,34 @@ export function LoginForm() {
         <span className="font-semibold text-foreground">admin-password</span>
       </p>
 
-      <form onSubmit={onSubmit} className="space-y-3">
+      <form onSubmit={onSubmit} className="space-y-3" noValidate>
         <div className="space-y-2">
           <label htmlFor="password" className="text-sm font-medium text-foreground">
             Пароль
           </label>
           <TextInput
             id="password"
-            type="password"
+            type={isPasswordVisible ? 'text' : 'password'}
             placeholder="admin-password"
             value={password}
             onChange={(event) => setPassword(event.currentTarget.value)}
             required
+            rightSection={
+              <ActionIcon
+                variant="subtle"
+                onClick={() => setIsPasswordVisible((current) => !current)}
+                aria-label={isPasswordVisible ? 'Скрыть пароль' : 'Показать пароль'}
+                style={{ border: 'none', background: 'transparent', boxShadow: 'none' }}
+              >
+                {isPasswordVisible ? <IconEyeOff size={16} /> : <IconEye size={16} />}
+              </ActionIcon>
+            }
           />
         </div>
 
         <AppButton type="submit" loading={loginMutation.isPending} fullWidth>
           Войти
         </AppButton>
-
-        {loginMutation.isError ? (
-          <AppInlineErrorAlert>
-            {getErrorMessage(loginMutation.error, 'Не удалось выполнить вход')}
-          </AppInlineErrorAlert>
-        ) : null}
       </form>
     </div>
   )

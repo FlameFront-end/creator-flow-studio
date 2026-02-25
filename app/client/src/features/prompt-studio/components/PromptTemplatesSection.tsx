@@ -170,7 +170,7 @@ export function PromptTemplatesSection() {
 
             <Divider />
 
-            <form onSubmit={onSubmit}>
+            <form onSubmit={onSubmit} noValidate>
               <Stack gap="sm">
                 <Select
                   label="Тип шаблона"

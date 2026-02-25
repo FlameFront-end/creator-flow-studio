@@ -1,5 +1,6 @@
-﻿import type { ReactNode } from 'react'
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 
 export type ColorTuple = [string, ...string[]]
 
@@ -15,6 +16,14 @@ type ThemeProviderProps = {
   children: ReactNode
   defaultColorScheme?: ColorScheme | 'auto'
   theme?: unknown
+}
+
+type ViewTransitionLike = {
+  finished: Promise<unknown>
+}
+
+type DocumentWithViewTransition = Document & {
+  startViewTransition?: (updateCallback: () => void) => ViewTransitionLike
 }
 
 const COLOR_SCHEME_STORAGE_KEY = 'app-color-scheme'
@@ -48,6 +57,72 @@ export function ThemeProvider({
   const [colorScheme, setColorSchemeState] = useState<ColorScheme>(() =>
     resolveInitialColorScheme(defaultColorScheme),
   )
+  const transitionTimeoutRef = useRef<number | null>(null)
+
+  const addThemeSwitchClass = useCallback(() => {
+    if (typeof document === 'undefined') return
+    document.documentElement.classList.add('theme-switching')
+  }, [])
+
+  const removeThemeSwitchClass = useCallback(() => {
+    if (typeof document === 'undefined') return
+    document.documentElement.classList.remove('theme-switching')
+  }, [])
+
+  const startThemeTransition = useCallback(() => {
+    if (typeof window === 'undefined') return
+    addThemeSwitchClass()
+    if (transitionTimeoutRef.current) {
+      window.clearTimeout(transitionTimeoutRef.current)
+    }
+    transitionTimeoutRef.current = window.setTimeout(() => {
+      removeThemeSwitchClass()
+      transitionTimeoutRef.current = null
+    }, 360)
+  }, [addThemeSwitchClass, removeThemeSwitchClass])
+
+  const applyColorSchemeTransition = useCallback(
+    (updater: (current: ColorScheme) => ColorScheme) => {
+      if (typeof document !== 'undefined') {
+        const documentWithViewTransition = document as DocumentWithViewTransition
+        if (typeof documentWithViewTransition.startViewTransition === 'function') {
+          addThemeSwitchClass()
+          const transition = documentWithViewTransition.startViewTransition(() => {
+            flushSync(() => {
+              setColorSchemeState(updater)
+            })
+          })
+          void transition.finished.finally(() => {
+            removeThemeSwitchClass()
+          })
+          return
+        }
+      }
+
+      setColorSchemeState((current) => {
+        const next = updater(current)
+        if (current !== next) {
+          startThemeTransition()
+        }
+        return next
+      })
+    },
+    [addThemeSwitchClass, removeThemeSwitchClass, startThemeTransition],
+  )
+
+  const setColorScheme = useCallback(
+    (next: ColorScheme) => {
+      applyColorSchemeTransition((current) => {
+        if (current === next) return current
+        return next
+      })
+    },
+    [applyColorSchemeTransition],
+  )
+
+  const toggleColorScheme = useCallback(() => {
+    applyColorSchemeTransition((current) => (current === 'dark' ? 'light' : 'dark'))
+  }, [applyColorSchemeTransition])
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -55,15 +130,23 @@ export function ThemeProvider({
     window.localStorage.setItem(COLOR_SCHEME_STORAGE_KEY, colorScheme)
   }, [colorScheme])
 
+  useEffect(
+    () => () => {
+      if (typeof window !== 'undefined' && transitionTimeoutRef.current) {
+        window.clearTimeout(transitionTimeoutRef.current)
+      }
+      removeThemeSwitchClass()
+    },
+    [removeThemeSwitchClass],
+  )
+
   const value = useMemo<ColorSchemeContextValue>(
     () => ({
       colorScheme,
-      setColorScheme: setColorSchemeState,
-      toggleColorScheme: () => {
-        setColorSchemeState((current) => (current === 'dark' ? 'light' : 'dark'))
-      },
+      setColorScheme,
+      toggleColorScheme,
     }),
-    [colorScheme],
+    [colorScheme, setColorScheme, toggleColorScheme],
   )
 
   return <ColorSchemeContext.Provider value={value}>{children}</ColorSchemeContext.Provider>

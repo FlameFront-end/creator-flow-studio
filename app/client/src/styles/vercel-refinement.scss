@@ -25,6 +25,12 @@
   --app-field-border: rgba(148, 163, 184, 0.26);
   --app-accent-soft: rgba(148, 163, 184, 0.14);
   --app-accent-border: rgba(148, 163, 184, 0.28);
+  --app-table-head-bg: color-mix(in srgb, var(--app-elevated-bg) 90%, transparent);
+  --app-table-head-color: var(--app-muted-text);
+  --app-table-row-text: var(--app-text);
+  --app-table-row-border: rgba(255, 255, 255, 0.08);
+  --app-table-row-bg: rgba(255, 255, 255, 0.008);
+  --app-table-row-alt-bg: rgba(255, 255, 255, 0.022);
 }
 
 :root[data-color-scheme='light'] {
@@ -41,6 +47,12 @@
   --app-field-border: rgba(148, 163, 184, 0.46);
   --app-accent-soft: rgba(100, 116, 139, 0.1);
   --app-accent-border: rgba(100, 116, 139, 0.24);
+  --app-table-head-bg: rgba(231, 238, 249, 0.95);
+  --app-table-head-color: #1e2f49;
+  --app-table-row-text: #27384f;
+  --app-table-row-border: rgba(148, 163, 184, 0.24);
+  --app-table-row-bg: rgba(255, 255, 255, 0.72);
+  --app-table-row-alt-bg: rgba(241, 245, 252, 0.95);
 }
 
 html {
@@ -50,6 +62,85 @@ html {
 body {
   line-height: 1.52;
   letter-spacing: -0.01em;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 240ms;
+  animation-timing-function: ease;
+}
+
+::view-transition-old(root) {
+  animation-name: theme-fade-out;
+}
+
+::view-transition-new(root) {
+  animation-name: theme-fade-in;
+}
+
+@keyframes theme-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes theme-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+:root.theme-switching body,
+:root.theme-switching .hero-surface,
+:root.theme-switching .panel-surface,
+:root.theme-switching .inner-surface,
+:root.theme-switching [data-slot='card'],
+:root.theme-switching .app-table thead th,
+:root.theme-switching .app-table tbody tr,
+:root.theme-switching .app-table tbody td,
+:root.theme-switching .projects-table thead th,
+:root.theme-switching .projects-table tbody tr,
+:root.theme-switching .projects-table tbody td,
+:root.theme-switching .appui-Input-input,
+:root.theme-switching .appui-Textarea-input,
+:root.theme-switching .appui-Select-input,
+:root.theme-switching .appui-NumberInput-input,
+:root.theme-switching .appui-Input-label,
+:root.theme-switching .appui-Textarea-label,
+:root.theme-switching .appui-Select-label,
+:root.theme-switching .appui-NumberInput-label,
+:root.theme-switching .appui-InputWrapper-label,
+:root.theme-switching .appui-Button-root,
+:root.theme-switching .appui-ActionIcon-root,
+:root.theme-switching .appui-Badge-root,
+:root.theme-switching .app-tabs .app-tabs-list,
+:root.theme-switching .app-tabs .app-tabs-highlight,
+:root.theme-switching .app-tabs .app-tabs-tab {
+  transition:
+    background 320ms ease,
+    background-color 320ms ease,
+    color 320ms ease,
+    border-color 320ms ease,
+    box-shadow 320ms ease !important;
+}
+
+:root.theme-switching .app-table,
+:root.theme-switching .projects-table,
+:root.theme-switching .app-table tr,
+:root.theme-switching .projects-table tr,
+:root.theme-switching .app-table th,
+:root.theme-switching .projects-table th,
+:root.theme-switching .app-table td,
+:root.theme-switching .projects-table td {
+  transition-property: background, background-color, color, border-color, box-shadow !important;
+  transition-duration: 320ms !important;
+  transition-timing-function: ease !important;
 }
 
 h1,
@@ -207,6 +298,26 @@ button {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-accent-border) 56%, transparent) !important;
 }
 
+[data-slot='input'][aria-invalid='true'],
+[data-slot='textarea'][aria-invalid='true'],
+.appui-Input-input[aria-invalid='true'],
+.appui-Textarea-input[aria-invalid='true'],
+.appui-Select-input[aria-invalid='true'],
+.appui-NumberInput-input[aria-invalid='true'] {
+  border-color: rgba(248, 113, 113, 0.62) !important;
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.18) !important;
+}
+
+[data-slot='input'][aria-invalid='true']:focus-visible,
+[data-slot='textarea'][aria-invalid='true']:focus-visible,
+.appui-Input-input[aria-invalid='true']:focus,
+.appui-Textarea-input[aria-invalid='true']:focus,
+.appui-Select-input[aria-invalid='true']:focus,
+.appui-NumberInput-input[aria-invalid='true']:focus {
+  border-color: rgba(248, 113, 113, 0.74) !important;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.24) !important;
+}
+
 .appui-Input-label,
 .appui-Textarea-label,
 .appui-Select-label,
@@ -284,8 +395,9 @@ button {
 .app-table,
 .projects-table {
   thead th {
-    background: color-mix(in srgb, var(--app-elevated-bg) 90%, transparent);
-    color: var(--app-muted-text);
+    background: var(--app-table-head-bg) !important;
+    color: var(--app-table-head-color) !important;
+    border-bottom-color: var(--app-table-row-border) !important;
     font-size: 0.76rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -294,13 +406,28 @@ button {
 
   tbody {
     td {
-      color: var(--app-text);
+      color: var(--app-table-row-text) !important;
+      background: var(--app-table-row-bg) !important;
+      border-bottom-color: var(--app-table-row-border) !important;
+    }
+
+    tr:nth-child(even) td {
+      background: var(--app-table-row-alt-bg) !important;
     }
 
     tr:hover td {
       background: color-mix(in srgb, var(--app-accent-soft) 90%, transparent) !important;
     }
   }
+}
+
+:root.theme-switching .app-table thead th,
+:root.theme-switching .projects-table thead th,
+:root.theme-switching .app-table tbody td,
+:root.theme-switching .projects-table tbody td {
+  transition-property: background, background-color, color, border-color, box-shadow !important;
+  transition-duration: 320ms !important;
+  transition-timing-function: ease !important;
 }
 
 .app-badge,
@@ -317,6 +444,45 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 1ms;
+  }
+
+  :root.theme-switching body,
+  :root.theme-switching .hero-surface,
+  :root.theme-switching .panel-surface,
+  :root.theme-switching .inner-surface,
+  :root.theme-switching [data-slot='card'],
+  :root.theme-switching .app-table thead th,
+  :root.theme-switching .app-table tbody tr,
+  :root.theme-switching .app-table tbody td,
+  :root.theme-switching .projects-table thead th,
+  :root.theme-switching .projects-table tbody tr,
+  :root.theme-switching .projects-table tbody td,
+  :root.theme-switching .appui-Input-input,
+  :root.theme-switching .appui-Textarea-input,
+  :root.theme-switching .appui-Select-input,
+  :root.theme-switching .appui-NumberInput-input,
+  :root.theme-switching .appui-Input-label,
+  :root.theme-switching .appui-Textarea-label,
+  :root.theme-switching .appui-Select-label,
+  :root.theme-switching .appui-NumberInput-label,
+  :root.theme-switching .appui-InputWrapper-label,
+  :root.theme-switching .appui-Button-root,
+  :root.theme-switching .appui-ActionIcon-root,
+  :root.theme-switching .appui-Badge-root,
+  :root.theme-switching .app-tabs .app-tabs-list,
+  :root.theme-switching .app-tabs .app-tabs-highlight,
+  :root.theme-switching .app-tabs .app-tabs-tab,
+  :root.theme-switching .app-table,
+  :root.theme-switching .projects-table,
+  :root.theme-switching .app-table tr,
+  :root.theme-switching .projects-table tr,
+  :root.theme-switching .app-table th,
+  :root.theme-switching .projects-table th,
+  :root.theme-switching .app-table td,
+  :root.theme-switching .projects-table td,
   [data-slot='button'],
   .appui-Button-root,
   .appui-ActionIcon-root,
@@ -327,4 +493,3 @@ button {
     transition: none !important;
   }
 }
-

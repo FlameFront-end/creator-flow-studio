@@ -121,7 +121,7 @@ export function PolicyRulesSection() {
 
   return (
     <Stack gap="md">
-      <form onSubmit={onSubmit}>
+      <form onSubmit={onSubmit} noValidate>
         <Stack gap="sm">
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
             <Select

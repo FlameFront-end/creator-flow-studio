@@ -81,6 +81,46 @@
   flex-shrink: 0;
 }
 
+.theme-toggle-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-toggle-icon {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    opacity 220ms ease,
+    transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.theme-toggle-btn[data-theme='dark'] {
+  .theme-toggle-icon-sun {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+
+  .theme-toggle-icon-moon {
+    opacity: 0;
+    transform: rotate(-70deg) scale(0.6);
+  }
+}
+
+.theme-toggle-btn[data-theme='light'] {
+  .theme-toggle-icon-sun {
+    opacity: 0;
+    transform: rotate(70deg) scale(0.6);
+  }
+
+  .theme-toggle-icon-moon {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+}
+
 .dashboard-hero-switch {
   width: fit-content;
   max-width: 100%;
@@ -101,11 +141,10 @@
 
   .app-tabs-list {
     background: transparent;
-    border: none;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.22);
-    border-radius: 0;
+    border: 1px solid var(--app-surface-border);
+    border-radius: 14px;
     gap: 6px;
-    padding: 2px 0 10px;
+    padding: 4px;
   }
 
   .app-tabs-tab {
@@ -113,8 +152,8 @@
   }
 
   .app-tabs-highlight {
-    bottom: 12px;
-    top: 2px;
+    bottom: 4px;
+    top: 4px;
   }
 }
 
@@ -145,7 +184,7 @@
   }
 
   .studio-tabs .app-tabs-list {
-    border-bottom-color: rgba(148, 163, 184, 0.3);
+    border-color: var(--app-surface-border);
   }
 }
 
@@ -191,7 +230,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .app-tabs .app-tabs-tab,
-  .app-tabs .app-tabs-highlight {
+  .app-tabs .app-tabs-highlight,
+  .theme-toggle-icon {
     transition: none;
   }
 }

@@ -36,9 +36,15 @@ export const DashboardHero = ({ view, onViewChange, onLogout }: DashboardHeroPro
               aria-label={isDark ? 'Переключить на светлую' : 'Переключить на тёмную'}
               title={isDark ? 'Переключить на светлую' : 'Переключить на тёмную'}
               onClick={() => setColorScheme(isDark ? 'light' : 'dark')}
-              className="h-10 w-10 rounded-full p-0"
+              className="theme-toggle-btn h-10 w-10 rounded-full p-0"
+              data-theme={colorScheme}
             >
-              {isDark ? <IconSun size={18} /> : <IconMoonStars size={18} />}
+              <span className="theme-toggle-icon theme-toggle-icon-sun" aria-hidden>
+                <IconSun size={18} />
+              </span>
+              <span className="theme-toggle-icon theme-toggle-icon-moon" aria-hidden>
+                <IconMoonStars size={18} />
+              </span>
             </AppButton>
 
             <AppButton

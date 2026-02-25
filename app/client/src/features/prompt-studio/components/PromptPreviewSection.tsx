@@ -163,7 +163,7 @@ export function PromptPreviewSection() {
 
   return (
     <Stack gap="md">
-      <form onSubmit={onSubmit}>
+      <form onSubmit={onSubmit} noValidate>
         <Stack gap="sm">
           <Select
             label="Персонаж"

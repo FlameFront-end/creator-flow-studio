@@ -129,11 +129,13 @@ export function TextInput(props: TextInputProps) {
           {...(rest as InputHTMLAttributes<HTMLInputElement>)}
           id={inputId}
           className="appui-Input-input"
+          aria-invalid={Boolean(error) || undefined}
           style={{
             width: '100%',
             minHeight: '40px',
             paddingLeft: leftSection ? '34px' : undefined,
             paddingRight: rightSection ? '34px' : undefined,
+            borderColor: error ? '#ef4444' : undefined,
             ...style,
           }}
         />
@@ -198,6 +200,7 @@ export function NumberInput(props: NumberInputProps) {
           id={inputId}
           type="number"
           className="appui-NumberInput-input"
+          aria-invalid={Boolean(error) || undefined}
           value={value ?? ''}
           defaultValue={value === undefined ? (defaultValue ?? undefined) : undefined}
           onChange={(event) => {
@@ -215,6 +218,7 @@ export function NumberInput(props: NumberInputProps) {
             minHeight: '40px',
             paddingLeft: leftSection ? '34px' : undefined,
             paddingRight: rightSection ? '34px' : undefined,
+            borderColor: error ? '#ef4444' : undefined,
             ...style,
           }}
         />
@@ -288,11 +292,13 @@ export function Textarea(props: TextareaProps) {
         ref={ref}
         id={inputId}
         className="appui-Textarea-input"
+        aria-invalid={Boolean(error) || undefined}
         rows={autosize ? minRows : (rest.rows as number | undefined)}
         value={value}
         style={{
           width: '100%',
           minHeight: `${Math.max(Number(minRows) || 1, 1) * 24}px`,
+          borderColor: error ? '#ef4444' : undefined,
           ...((styles?.input as CSSProperties | undefined) ?? {}),
           ...style,
         }}
@@ -389,7 +395,8 @@ export function Select(props: SelectProps) {
             {...rest}
             id={inputId}
             className="appui-Select-input"
-            style={{ width: '100%', minHeight: '42px', ...style }}
+            aria-invalid={Boolean(error) || undefined}
+            style={{ width: '100%', minHeight: '42px', borderColor: error ? '#ef4444' : undefined, ...style }}
           >
             <UiSelectValue placeholder={placeholder} />
           </UiSelectTrigger>
