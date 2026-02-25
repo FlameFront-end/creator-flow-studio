@@ -46,6 +46,11 @@ export class IdeasController {
     return this.ideasService.generateImagePrompt(ideaId);
   }
 
+  @Post(':id/video-prompt/generate')
+  generateVideoPrompt(@Param('id', new ParseUUIDPipe()) ideaId: string) {
+    return this.ideasService.generateVideoPrompt(ideaId);
+  }
+
   @Post(':id/images/generate')
   enqueueImageGeneration(
     @Param('id', new ParseUUIDPipe()) ideaId: string,
@@ -90,6 +95,11 @@ export class IdeasController {
   @Delete('logs/:id')
   removeLog(@Param('id', new ParseUUIDPipe()) logId: string) {
     return this.ideasService.removeLog(logId);
+  }
+
+  @Delete('assets/:id')
+  removeAsset(@Param('id', new ParseUUIDPipe()) assetId: string) {
+    return this.ideasService.removeAsset(assetId);
   }
 
   @Delete(':id')

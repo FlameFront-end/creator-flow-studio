@@ -1,4 +1,4 @@
-import { Alert, Code, Divider, Paper, Stack } from '@mantine/core'
+import { Alert, Code, Divider, Paper, Stack } from '@ui/core'
 import { useNavigate } from 'react-router-dom'
 import { ROUTES } from '../../shared/model/routes'
 import { ErrorActions } from './components/ErrorActions'
@@ -45,4 +45,5 @@ export default function ErrorPage() {
     </Paper>
   )
 }
+
 

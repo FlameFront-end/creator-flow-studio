@@ -1,4 +1,4 @@
-export const statusColor: Record<string, string> = {
+﻿export const statusColor: Record<string, string> = {
   queued: 'gray',
   running: 'blue',
   succeeded: 'green',
@@ -29,13 +29,41 @@ export const formatOperationLabel = (operation: string): string => {
     case 'caption':
       return 'Генерация подписи'
     case 'image_prompt':
-      return 'Генерация image prompt'
+      return 'Генерация промпта изображения'
+    case 'video_prompt':
+      return 'Генерация промпта видео'
     case 'image':
-      return 'Генерация картинки'
+      return 'Генерация изображения'
     case 'video':
       return 'Генерация видео'
     default:
       return operation
+  }
+}
+
+export const formatIdeaFormatLabel = (format: string): string => {
+  switch (format.toLowerCase()) {
+    case 'reel':
+      return 'Рилс'
+    case 'short':
+      return 'Шортс'
+    case 'tiktok':
+      return 'ТикТок'
+    default:
+      return format
+  }
+}
+
+export const formatAssetTypeLabel = (assetType: string): string => {
+  switch (assetType.toLowerCase()) {
+    case 'image':
+      return 'Изображение'
+    case 'video':
+      return 'Видео'
+    case 'audio':
+      return 'Аудио'
+    default:
+      return assetType
   }
 }
 

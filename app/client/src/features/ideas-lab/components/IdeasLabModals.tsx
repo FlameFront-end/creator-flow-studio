@@ -1,4 +1,4 @@
-import { ConfirmActionModal } from '../../../shared/components/ConfirmActionModal'
+﻿import { ConfirmActionModal } from '../../../shared/components/ConfirmActionModal'
 import type { IdeasLabController } from '../hooks/useIdeasLabController'
 
 export const IdeasLabModals = ({ controller }: { controller: IdeasLabController }) => {
@@ -33,17 +33,6 @@ export const IdeasLabModals = ({ controller }: { controller: IdeasLabController 
         onClose={() => controller.setDeleteIdeaId(null)}
         onConfirm={() => controller.deleteIdeaId && controller.removeIdeaMutation.mutate(controller.deleteIdeaId)}
       />
-
-      <ConfirmActionModal
-        opened={Boolean(controller.deleteLogId)}
-        title="Удалить лог?"
-        message="Эта запись AI-лога будет удалена."
-        confirmLabel="Удалить лог"
-        loading={controller.removeLogMutation.isPending}
-        onClose={() => controller.setDeleteLogId(null)}
-        onConfirm={() => controller.deleteLogId && controller.removeLogMutation.mutate(controller.deleteLogId)}
-      />
     </>
   )
 }
-

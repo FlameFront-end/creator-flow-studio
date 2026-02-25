@@ -1,7 +1,8 @@
-﻿import { ActionIcon, Alert, Group, Loader, Paper, Stack, Text, Title } from '@mantine/core'
+﻿import { ActionIcon, Group, Loader, Paper, Stack, Text, Title } from '@ui/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { IconPencil, IconTrash } from '@tabler/icons-react'
 import { projectsApi } from '../../../shared/api/services/projects.api'
+import { AppInlineErrorAlert } from '../../../shared/components/AppInlineErrorAlert'
 import { AppTable } from '../../../shared/components/AppTable'
 import { ConfirmActionModal } from '../../../shared/components/ConfirmActionModal'
 import { getErrorMessage } from '../../../shared/lib/httpError'
@@ -64,15 +65,15 @@ export function ProjectsListSection({
         ) : null}
 
         {projectsQuery.isError ? (
-          <Alert color="red" title="Ошибка" variant="light">
+          <AppInlineErrorAlert>
             {getErrorMessage(projectsQuery.error, 'Не удалось загрузить проекты')}
-          </Alert>
+          </AppInlineErrorAlert>
         ) : null}
 
         {deleteMutation.isError ? (
-          <Alert color="red" title="Ошибка" variant="light">
+          <AppInlineErrorAlert>
             {getErrorMessage(deleteMutation.error, 'Не удалось удалить проект')}
-          </Alert>
+          </AppInlineErrorAlert>
         ) : null}
 
         {!projectsQuery.isLoading && !projectsQuery.data?.length ? <Text c="dimmed">Пока нет проектов</Text> : null}
@@ -152,3 +153,5 @@ export function ProjectsListSection({
     </Paper>
   )
 }
+
+

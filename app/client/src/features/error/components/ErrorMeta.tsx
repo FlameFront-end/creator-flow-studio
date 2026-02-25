@@ -1,4 +1,4 @@
-import { Code, Group, Paper, SimpleGrid, Text } from '@mantine/core'
+import { Code, Group, Paper, SimpleGrid, Text } from '@ui/core'
 import { IconBug, IconShieldLock } from '@tabler/icons-react'
 import { isRouteErrorResponse } from 'react-router-dom'
 
@@ -27,4 +27,5 @@ export const ErrorMeta = ({ pathname, error }: ErrorMetaProps) => {
     </SimpleGrid>
   )
 }
+
 

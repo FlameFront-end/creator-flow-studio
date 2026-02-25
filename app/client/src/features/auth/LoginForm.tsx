@@ -1,11 +1,20 @@
-import { Alert, Button, Paper, PasswordInput, Stack, Text, Title } from '@mantine/core'
-import { useMutation } from '@tanstack/react-query'
-import { useState } from 'react'
-import type { FormEvent } from 'react'
+﻿import { useMutation } from '@tanstack/react-query'
+import { useState, type FormEvent } from 'react'
 import { authApi } from '../../shared/api/services/auth.api'
+import { AppButton } from '../../shared/components/AppButton'
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from '../../shared/components/ui/alert'
+import { Input } from '../../shared/components/ui/input'
 import { setAuthToken } from '../../shared/lib/auth'
 import { getErrorMessage } from '../../shared/lib/httpError'
-import { showErrorToast, showSuccessToast, showValidationToast } from '../../shared/lib/toast'
+import {
+  showErrorToast,
+  showSuccessToast,
+  showValidationToast,
+} from '../../shared/lib/toast'
 
 export function LoginForm() {
   const [password, setPassword] = useState('changeme')
@@ -32,37 +41,40 @@ export function LoginForm() {
   }
 
   return (
-    <Paper className="panel-surface login-surface" radius={24} p="xl">
-      <Stack gap="md">
-        <div>
-          <Title order={3}>Вход</Title>
-          <Text c="dimmed" mt={4}>
-            Пароль подставлен автоматически для локальной разработки
-          </Text>
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Для локального запуска пароль по умолчанию:{' '}
+        <span className="font-semibold text-foreground">changeme</span>
+      </p>
+
+      <form onSubmit={onSubmit} className="space-y-3">
+        <div className="space-y-2">
+          <label htmlFor="password" className="text-sm font-medium text-foreground">
+            Пароль
+          </label>
+          <Input
+            id="password"
+            type="password"
+            placeholder="changeme"
+            value={password}
+            onChange={(event) => setPassword(event.currentTarget.value)}
+            required
+          />
         </div>
 
-        <form onSubmit={onSubmit}>
-          <Stack gap="sm">
-            <PasswordInput
-              label="Пароль"
-              placeholder="changeme"
-              value={password}
-              onChange={(event) => setPassword(event.currentTarget.value)}
-              required
-            />
+        <AppButton type="submit" loading={loginMutation.isPending} fullWidth>
+          Войти
+        </AppButton>
 
-            <Button type="submit" loading={loginMutation.isPending}>
-              Войти
-            </Button>
-
-            {loginMutation.isError ? (
-              <Alert color="red" title="Ошибка входа" variant="light">
-                {getErrorMessage(loginMutation.error, 'Не удалось выполнить вход')}
-              </Alert>
-            ) : null}
-          </Stack>
-        </form>
-      </Stack>
-    </Paper>
+        {loginMutation.isError ? (
+          <Alert variant="destructive">
+            <AlertTitle>Ошибка входа</AlertTitle>
+            <AlertDescription>
+              {getErrorMessage(loginMutation.error, 'Не удалось выполнить вход')}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+      </form>
+    </div>
   )
 }

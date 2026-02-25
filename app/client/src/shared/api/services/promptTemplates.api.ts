@@ -1,6 +1,6 @@
 import { axiosInstance } from '../axiosInstance'
 
-export type PromptTemplateKey = 'ideas' | 'script' | 'caption' | 'image_prompt'
+export type PromptTemplateKey = 'ideas' | 'script' | 'caption' | 'image_prompt' | 'video_prompt'
 
 export type PromptTemplate = {
   id: string

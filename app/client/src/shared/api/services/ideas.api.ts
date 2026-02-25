@@ -2,7 +2,14 @@ import { axiosInstance } from '../axiosInstance'
 
 export type GenerationStatus = 'queued' | 'running' | 'succeeded' | 'failed'
 export type IdeaFormat = 'reel' | 'short' | 'tiktok'
-export type AiOperation = 'ideas' | 'script' | 'caption' | 'image_prompt' | 'image' | 'video'
+export type AiOperation =
+  | 'ideas'
+  | 'script'
+  | 'caption'
+  | 'image_prompt'
+  | 'video_prompt'
+  | 'image'
+  | 'video'
 export type AssetType = 'image' | 'video' | 'audio'
 
 export type Script = {
@@ -36,9 +43,17 @@ export type Idea = {
   error: string | null
   createdAt: string
   imagePrompt: string | null
+  videoPrompt: string | null
   latestScript: Script | null
   latestCaption: Caption | null
   latestImage: Asset | null
+  latestVideo: Asset | null
+  latestImageStatus?: GenerationStatus | null
+  latestVideoStatus?: GenerationStatus | null
+  imageAssetsCount?: number
+  videoAssetsCount?: number
+  imageSucceededCount?: number
+  videoSucceededCount?: number
 }
 
 export type IdeaDetails = Omit<Idea, 'latestScript' | 'latestCaption'> & {
@@ -146,6 +161,12 @@ export const ideasApi = {
     )
     return data
   },
+  async generateVideoPrompt(ideaId: string): Promise<GenerateImagePromptResponse> {
+    const { data } = await axiosInstance.post<GenerateImagePromptResponse>(
+      `/ideas/${ideaId}/video-prompt/generate`,
+    )
+    return data
+  },
   async generateImage(ideaId: string, payload: GenerateAssetRequest): Promise<GenerateImageResponse> {
     const { data } = await axiosInstance.post<GenerateImageResponse>(`/ideas/${ideaId}/images/generate`, payload)
     return data
@@ -188,6 +209,10 @@ export const ideasApi = {
   },
   async removeLog(logId: string): Promise<ClearResponse> {
     const { data } = await axiosInstance.delete<ClearResponse>(`/ideas/logs/${logId}`)
+    return data
+  },
+  async removeAsset(assetId: string): Promise<ClearResponse> {
+    const { data } = await axiosInstance.delete<ClearResponse>(`/ideas/assets/${assetId}`)
     return data
   },
 }

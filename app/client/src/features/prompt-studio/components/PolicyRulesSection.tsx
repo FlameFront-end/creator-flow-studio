@@ -1,16 +1,9 @@
-﻿import {
-  ActionIcon,
-  Alert,
-  Badge,
-  Button,
-  Group,
-  Select,
-  SimpleGrid,
-  Stack,
-  Text,
-  Textarea,
-  Title,
-} from '@mantine/core'
+import { ActionIcon, Group, Select, SimpleGrid, Stack, Text, Textarea, Title } from '@ui/core'
+
+
+import { AppBadge } from '../../../shared/components/AppBadge'
+import { AppButton } from '../../../shared/components/AppButton'
+import { AppInlineErrorAlert } from '../../../shared/components/AppInlineErrorAlert'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { IconPencil, IconTrash } from '@tabler/icons-react'
 import { useState } from 'react'
@@ -164,28 +157,28 @@ export function PolicyRulesSection() {
             <Title order={5}>{editingId ? 'Редактирование правила' : 'Создание правила'}</Title>
             <Group>
               {editingId ? (
-                <Button variant="default" onClick={resetForm}>
+                <AppButton variant="default" onClick={resetForm}>
                   Отмена
-                </Button>
+                </AppButton>
               ) : null}
-              <Button type="submit" loading={createMutation.isPending || updateMutation.isPending}>
+              <AppButton type="submit" loading={createMutation.isPending || updateMutation.isPending}>
                 {editingId ? 'Сохранить' : 'Создать'}
-              </Button>
+              </AppButton>
             </Group>
           </Group>
         </Stack>
       </form>
 
       {mutationError ? (
-        <Alert color="red" title="Ошибка" variant="light">
+        <AppInlineErrorAlert>
           {getErrorMessage(mutationError, 'Не удалось сохранить правило')}
-        </Alert>
+        </AppInlineErrorAlert>
       ) : null}
 
       {rulesQuery.isError ? (
-        <Alert color="red" title="Ошибка" variant="light">
+        <AppInlineErrorAlert>
           {getErrorMessage(rulesQuery.error, 'Не удалось загрузить правила')}
-        </Alert>
+        </AppInlineErrorAlert>
       ) : null}
 
       {!rulesQuery.data?.length ? (
@@ -204,9 +197,9 @@ export function PolicyRulesSection() {
             {rulesQuery.data.map((rule) => (
               <AppTable.Tr key={rule.id}>
                 <AppTable.Td>
-                  <Badge color={rule.type === 'DONT' ? 'red' : 'green'}>
+                  <AppBadge color={rule.type === 'DONT' ? 'red' : 'green'}>
                     {rule.type === 'DO' ? 'Рекомендация' : 'Ограничение'}
-                  </Badge>
+                  </AppBadge>
                 </AppTable.Td>
                 <AppTable.Td>{rule.severity === 'hard' ? 'Строгое' : 'Гибкое'}</AppTable.Td>
                 <AppTable.Td>{rule.text}</AppTable.Td>
@@ -244,3 +237,7 @@ export function PolicyRulesSection() {
     </Stack>
   )
 }
+
+
+
+

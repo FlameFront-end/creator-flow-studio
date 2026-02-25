@@ -1,16 +1,7 @@
-﻿import {
-  ActionIcon,
-  Alert,
-  Button,
-  Group,
-  NumberInput,
-  SimpleGrid,
-  Stack,
-  Text,
-  Textarea,
-  TextInput,
-  Title,
-} from '@mantine/core'
+import { ActionIcon, Group, NumberInput, SimpleGrid, Stack, Text, Textarea, TextInput, Title } from '@ui/core'
+
+import { AppButton } from '../../../shared/components/AppButton'
+import { AppInlineErrorAlert } from '../../../shared/components/AppInlineErrorAlert'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { IconPencil, IconTrash } from '@tabler/icons-react'
 import { useState } from 'react'
@@ -196,28 +187,28 @@ export function PersonasSection() {
             <Title order={5}>{editingId ? 'Редактирование персонажа' : 'Создание персонажа'}</Title>
             <Group>
               {editingId ? (
-                <Button variant="default" onClick={resetForm}>
+                <AppButton variant="default" onClick={resetForm}>
                   Отмена
-                </Button>
+                </AppButton>
               ) : null}
-              <Button type="submit" loading={createMutation.isPending || updateMutation.isPending}>
+              <AppButton type="submit" loading={createMutation.isPending || updateMutation.isPending}>
                 {editingId ? 'Сохранить' : 'Создать'}
-              </Button>
+              </AppButton>
             </Group>
           </Group>
         </Stack>
       </form>
 
       {mutationError ? (
-        <Alert color="red" title="Ошибка" variant="light">
+        <AppInlineErrorAlert>
           {getErrorMessage(mutationError, 'Не удалось сохранить персонажа')}
-        </Alert>
+        </AppInlineErrorAlert>
       ) : null}
 
       {personasQuery.isError ? (
-        <Alert color="red" title="Ошибка" variant="light">
+        <AppInlineErrorAlert>
           {getErrorMessage(personasQuery.error, 'Не удалось загрузить персонажей')}
-        </Alert>
+        </AppInlineErrorAlert>
       ) : null}
 
       {!personasQuery.data?.length ? (
@@ -272,3 +263,7 @@ export function PersonasSection() {
     </Stack>
   )
 }
+
+
+
+

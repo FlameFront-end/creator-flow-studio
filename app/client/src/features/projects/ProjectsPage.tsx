@@ -1,4 +1,4 @@
-﻿import { Stack } from '@mantine/core'
+﻿import { Stack } from '@ui/core'
 import { useState } from 'react'
 import type { Project } from '../../shared/api/services/projects.api'
 import { CreateProjectSection } from './components/CreateProjectSection'
@@ -29,3 +29,4 @@ export function ProjectsPage() {
     </Stack>
   )
 }
+

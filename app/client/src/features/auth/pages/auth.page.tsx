@@ -1,26 +1,34 @@
-import { Badge, Box, Container, Paper, Stack, Text, Title } from '@mantine/core'
+﻿import { AppBadge } from '../../../shared/components/AppBadge'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../../../shared/components/ui/card'
 import { LoginForm } from '../LoginForm'
 
 const AuthPage = () => {
   return (
-    <Box mih="100vh" py={36}>
-      <Container size={460}>
-        <Stack gap="lg">
-          <Paper className="hero-surface" radius={24} p="xl">
-            <Stack gap={6}>
-              <Badge color="cyan" variant="light" w="fit-content">
-                Локальный вход
-              </Badge>
-              <Title order={2} style={{ letterSpacing: '-0.02em' }}>
-                Авторизация администратора
-              </Title>
-              <Text c="dimmed">Введите пароль и войдите в панель управления</Text>
-            </Stack>
-          </Paper>
-          <LoginForm />
-        </Stack>
-      </Container>
-    </Box>
+    <div className="auth-page relative flex min-h-screen items-center py-8">
+      <div className="container max-w-[460px]">
+        <Card className="panel-surface auth-card border-border/80 bg-card/90">
+          <CardHeader className="space-y-4">
+            <AppBadge color="cyan" variant="light" w="fit-content">
+              Вход в систему
+            </AppBadge>
+            <CardTitle className="auth-title">Creator Flow Studio</CardTitle>
+            <CardDescription className="auth-subtitle text-sm md:text-base">
+              Авторизуйтесь, чтобы открыть панель управления контентом.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent>
+            <LoginForm />
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   )
 }
 

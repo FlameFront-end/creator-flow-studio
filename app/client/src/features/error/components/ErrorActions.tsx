@@ -1,4 +1,6 @@
-import { Button, Group } from '@mantine/core'
+import { Group } from '@ui/core'
+
+import { AppButton } from '../../../shared/components/AppButton'
 import { IconCopy, IconRefresh } from '@tabler/icons-react'
 
 type ErrorActionsProps = {
@@ -24,17 +26,21 @@ export const ErrorActions = ({
 }: ErrorActionsProps) => {
   return (
     <Group gap="sm" wrap="wrap">
-      <Button leftSection={<IconRefresh size={16} />} onClick={isModuleLoadError ? onClearCacheAndReload : onReload}>
+      <AppButton leftSection={<IconRefresh size={16} />} onClick={isModuleLoadError ? onClearCacheAndReload : onReload}>
         {isModuleLoadError ? 'Очистить кеш и перезагрузить' : 'Перезагрузить'}
-      </Button>
-      <Button variant="default" onClick={onGoHome}>На главную</Button>
-      <Button variant="subtle" onClick={onToggleDetails}>
+      </AppButton>
+      <AppButton variant="default" onClick={onGoHome}>На главную</AppButton>
+      <AppButton variant="subtle" onClick={onToggleDetails}>
         {showDetails ? 'Скрыть детали' : 'Показать детали'}
-      </Button>
-      <Button variant="subtle" leftSection={<IconCopy size={15} />} onClick={onCopyDetails}>
+      </AppButton>
+      <AppButton variant="subtle" leftSection={<IconCopy size={15} />} onClick={onCopyDetails}>
         {copyState === 'idle' ? 'Скопировать детали' : copyState === 'ok' ? 'Скопировано' : 'Ошибка копирования'}
-      </Button>
+      </AppButton>
     </Group>
   )
 }
+
+
+
+
 

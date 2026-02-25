@@ -1,4 +1,4 @@
-﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { ideasApi, type Idea, type IdeaFormat } from '../../../shared/api/services/ideas.api'
 import { personasApi } from '../../../shared/api/services/personas.api'
@@ -11,7 +11,38 @@ import {
   IDEAS_DEFAULT_TOPIC,
   IDEAS_LOGS_COLLAPSED_STORAGE_KEY,
   IDEAS_QUERY_KEY,
+  IDEAS_SELECTED_ID_BY_PROJECT_STORAGE_KEY,
 } from '../model/ideasLab.constants'
+
+type PersistedSelectedIdeaByProject = Record<string, string>
+
+const readPersistedSelectedIdeaByProject = (): PersistedSelectedIdeaByProject => {
+  if (typeof window === 'undefined') return {}
+
+  const raw = window.localStorage.getItem(IDEAS_SELECTED_ID_BY_PROJECT_STORAGE_KEY)
+  if (!raw) return {}
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {}
+    }
+
+    const entries = Object.entries(parsed as Record<string, unknown>).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[0] === 'string' && typeof entry[1] === 'string' && entry[1].length > 0,
+    )
+
+    return Object.fromEntries(entries)
+  } catch {
+    return {}
+  }
+}
+
+const writePersistedSelectedIdeaByProject = (value: PersistedSelectedIdeaByProject) => {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(IDEAS_SELECTED_ID_BY_PROJECT_STORAGE_KEY, JSON.stringify(value))
+}
 
 export const useIdeasLabController = () => {
   const queryClient = useQueryClient()
@@ -36,10 +67,7 @@ export const useIdeasLabController = () => {
   const personasQuery = useQuery({ queryKey: ['personas'], queryFn: personasApi.getPersonas })
 
   useEffect(() => {
-    window.localStorage.setItem(
-      IDEAS_LOGS_COLLAPSED_STORAGE_KEY,
-      isLogsCollapsed ? '1' : '0',
-    )
+    window.localStorage.setItem(IDEAS_LOGS_COLLAPSED_STORAGE_KEY, isLogsCollapsed ? '1' : '0')
   }, [isLogsCollapsed])
 
   useEffect(() => {
@@ -62,10 +90,49 @@ export const useIdeasLabController = () => {
   })
 
   useEffect(() => {
-    if (!selectedIdeaId && ideasQuery.data?.length) {
-      setSelectedIdeaId(ideasQuery.data[0].id)
+    const ideas = ideasQuery.data ?? []
+
+    if (!ideas.length) {
+      if (selectedIdeaId !== null) {
+        setSelectedIdeaId(null)
+      }
+      return
     }
-  }, [selectedIdeaId, ideasQuery.data])
+
+    if (selectedIdeaId && ideas.some((idea) => idea.id === selectedIdeaId)) {
+      return
+    }
+
+    const persistedSelectedIdeaId =
+      projectId ? readPersistedSelectedIdeaByProject()[projectId] ?? null : null
+
+    if (persistedSelectedIdeaId && ideas.some((idea) => idea.id === persistedSelectedIdeaId)) {
+      setSelectedIdeaId(persistedSelectedIdeaId)
+      return
+    }
+
+    setSelectedIdeaId(ideas[0].id)
+  }, [projectId, selectedIdeaId, ideasQuery.data])
+
+  useEffect(() => {
+    if (!projectId || !selectedIdeaId) {
+      return
+    }
+
+    if (!ideasQuery.data?.some((idea) => idea.id === selectedIdeaId)) {
+      return
+    }
+
+    const persisted = readPersistedSelectedIdeaByProject()
+    if (persisted[projectId] === selectedIdeaId) {
+      return
+    }
+
+    writePersistedSelectedIdeaByProject({
+      ...persisted,
+      [projectId]: selectedIdeaId,
+    })
+  }, [projectId, selectedIdeaId, ideasQuery.data])
 
   const detailsQuery = useQuery({
     queryKey: [...IDEA_DETAILS_QUERY_KEY, selectedIdeaId],
@@ -90,51 +157,63 @@ export const useIdeasLabController = () => {
   const generateIdeasMutation = useMutation({
     mutationFn: ideasApi.generateIdeas,
     onSuccess: invalidateAll,
-    onError: (error) => showErrorToast(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕСЃС‚Р°РІРёС‚СЊ Р·Р°РґР°С‡Сѓ РІ РѕС‡РµСЂРµРґСЊ'),
+    onError: (error) => showErrorToast(error, 'Не удалось поставить задачу в очередь'),
   })
 
   const generateScriptMutation = useMutation({
     mutationFn: (payload: { ideaId: string; regenerate: boolean }) =>
       ideasApi.generateScript(payload.ideaId, { regenerate: payload.regenerate }),
     onSuccess: invalidateAll,
-    onError: (error) => showErrorToast(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕСЃС‚Р°РІРёС‚СЊ СЃС†РµРЅР°СЂРёР№ РІ РѕС‡РµСЂРµРґСЊ'),
+    onError: (error) => showErrorToast(error, 'Не удалось поставить генерацию сценария в очередь'),
   })
 
   const generateCaptionMutation = useMutation({
     mutationFn: (payload: { ideaId: string; regenerate: boolean }) =>
       ideasApi.generateCaption(payload.ideaId, { regenerate: payload.regenerate }),
     onSuccess: invalidateAll,
-    onError: (error) => showErrorToast(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕСЃС‚Р°РІРёС‚СЊ РїРѕРґРїРёСЃСЊ РІ РѕС‡РµСЂРµРґСЊ'),
+    onError: (error) => showErrorToast(error, 'Не удалось поставить генерацию подписи в очередь'),
   })
 
   const generateImagePromptMutation = useMutation({
     mutationFn: (ideaId: string) => ideasApi.generateImagePrompt(ideaId),
     onSuccess: invalidateAll,
-    onError: (error) => showErrorToast(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ СЃРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ image prompt'),
+    onError: (error) => showErrorToast(error, 'Не удалось сгенерировать промпт изображения'),
+  })
+
+  const generateVideoPromptMutation = useMutation({
+    mutationFn: (ideaId: string) => ideasApi.generateVideoPrompt(ideaId),
+    onSuccess: invalidateAll,
+    onError: (error) => showErrorToast(error, 'Не удалось сгенерировать промпт видео'),
   })
 
   const generateImageMutation = useMutation({
     mutationFn: (payload: { ideaId: string; regenerate: boolean }) =>
       ideasApi.generateImage(payload.ideaId, { regenerate: payload.regenerate }),
     onSuccess: invalidateAll,
-    onError: (error) => showErrorToast(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕСЃС‚Р°РІРёС‚СЊ РіРµРЅРµСЂР°С†РёСЋ РєР°СЂС‚РёРЅРєРё РІ РѕС‡РµСЂРµРґСЊ'),
+    onError: (error) => showErrorToast(error, 'Не удалось поставить генерацию изображения в очередь'),
   })
 
   const generateVideoMutation = useMutation({
     mutationFn: (payload: { ideaId: string; regenerate: boolean }) =>
       ideasApi.generateVideo(payload.ideaId, { regenerate: payload.regenerate }),
     onSuccess: invalidateAll,
-    onError: (error) => showErrorToast(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕСЃС‚Р°РІРёС‚СЊ РіРµРЅРµСЂР°С†РёСЋ РІРёРґРµРѕ РІ РѕС‡РµСЂРµРґСЊ'),
+    onError: (error) => showErrorToast(error, 'Не удалось поставить генерацию видео в очередь'),
   })
 
   const clearIdeasMutation = useMutation({
     mutationFn: (currentProjectId: string) => ideasApi.clearIdeas(currentProjectId),
-    onSuccess: () => {
+    onSuccess: (_, currentProjectId) => {
+      const persisted = readPersistedSelectedIdeaByProject()
+      if (persisted[currentProjectId]) {
+        delete persisted[currentProjectId]
+        writePersistedSelectedIdeaByProject(persisted)
+      }
+
       setSelectedIdeaId(null)
       setClearIdeasModalOpen(false)
       invalidateAll()
     },
-    onError: (error) => showErrorToast(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‡РёСЃС‚РёС‚СЊ СЃРїРёСЃРѕРє РёРґРµР№'),
+    onError: (error) => showErrorToast(error, 'Не удалось очистить список идей'),
   })
 
   const clearLogsMutation = useMutation({
@@ -143,7 +222,7 @@ export const useIdeasLabController = () => {
       setClearLogsModalOpen(false)
       invalidateAll()
     },
-    onError: (error) => showErrorToast(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‡РёСЃС‚РёС‚СЊ AI-Р»РѕРіРё'),
+    onError: (error) => showErrorToast(error, 'Не удалось очистить AI-логи'),
   })
 
   const removeIdeaMutation = useMutation({
@@ -155,7 +234,7 @@ export const useIdeasLabController = () => {
       setDeleteIdeaId(null)
       invalidateAll()
     },
-    onError: (error) => showErrorToast(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ РёРґРµСЋ'),
+    onError: (error) => showErrorToast(error, 'Не удалось удалить идею'),
   })
 
   const removeLogMutation = useMutation({
@@ -164,7 +243,7 @@ export const useIdeasLabController = () => {
       setDeleteLogId(null)
       invalidateAll()
     },
-    onError: (error) => showErrorToast(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ Р»РѕРі'),
+    onError: (error) => showErrorToast(error, 'Не удалось удалить лог'),
   })
 
   const selectedIdea = useMemo(
@@ -187,10 +266,12 @@ export const useIdeasLabController = () => {
 
   const startIdeaGeneration = () => {
     const parsedCount = Number(count)
+
     if (!projectId || !personaId || topic.trim().length < 3) {
-      showValidationToast('Р’С‹Р±РµСЂРёС‚Рµ РїСЂРѕРµРєС‚, РїРµСЂСЃРѕРЅР°Р¶Р° Рё Р·Р°РїРѕР»РЅРёС‚Рµ С‚РµРјСѓ')
+      showValidationToast('Выберите проект, персонажа и заполните тему')
       return
     }
+
     if (!Number.isFinite(parsedCount) || parsedCount < 1) {
       showValidationToast('Количество идей должно быть числом от 1')
       return
@@ -240,6 +321,7 @@ export const useIdeasLabController = () => {
     generateScriptMutation,
     generateCaptionMutation,
     generateImagePromptMutation,
+    generateVideoPromptMutation,
     generateImageMutation,
     generateVideoMutation,
     clearIdeasMutation,
@@ -251,4 +333,3 @@ export const useIdeasLabController = () => {
 
 export type IdeasLabController = ReturnType<typeof useIdeasLabController>
 export type IdeasLabIdea = Idea
-

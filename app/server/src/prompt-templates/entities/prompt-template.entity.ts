@@ -5,6 +5,7 @@ export enum PromptTemplateKey {
   SCRIPT = 'script',
   CAPTION = 'caption',
   IMAGE_PROMPT = 'image_prompt',
+  VIDEO_PROMPT = 'video_prompt',
 }
 
 @Entity({ name: 'prompt_templates' })

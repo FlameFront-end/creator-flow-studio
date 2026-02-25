@@ -1,4 +1,4 @@
-import { ActionIcon, Alert, Button, Code, Group, Paper, Select, SimpleGrid, Stack, Text, Textarea, TextInput, Title } from '@mantine/core'
+﻿import { ActionIcon, Alert, Code, Group, Paper, Select, SimpleGrid, Stack, Text, Textarea, TextInput, Title } from '@ui/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { IconPlus, IconTrash } from '@tabler/icons-react'
 import { useMemo, useState } from 'react'
@@ -7,6 +7,8 @@ import { personasApi } from '../../../shared/api/services/personas.api'
 import { promptPreviewApi } from '../../../shared/api/services/promptPreview.api'
 import { promptTemplatesApi } from '../../../shared/api/services/promptTemplates.api'
 import type { PromptTemplateKey } from '../../../shared/api/services/promptTemplates.api'
+import { AppButton } from '../../../shared/components/AppButton'
+import { AppInlineErrorAlert } from '../../../shared/components/AppInlineErrorAlert'
 import { AppTable } from '../../../shared/components/AppTable'
 import { getErrorMessage } from '../../../shared/lib/httpError'
 import { showErrorToast, showSuccessToast } from '../../../shared/lib/toast'
@@ -192,7 +194,7 @@ export function PromptPreviewSection() {
           <Paper className="inner-surface" radius="md" p="sm">
             <Stack gap="sm">
               <Title order={5}>Быстрое добавление переменных</Title>
-              <SimpleGrid cols={{ base: 1, sm: 4 }}>
+              <SimpleGrid cols={{ base: 1, sm: 3 }} className="prompt-preview-quick-grid">
                 <TextInput
                   label="Ключ"
                   placeholder="topic"
@@ -216,12 +218,13 @@ export function PromptPreviewSection() {
                   value={varValue}
                   onChange={(event) => setVarValue(event.currentTarget.value)}
                 />
-                <Group align="end">
-                  <Button leftSection={<IconPlus size={16} />} onClick={addVariable} variant="light" fullWidth>
-                    Добавить
-                  </Button>
-                </Group>
               </SimpleGrid>
+
+              <Group justify="flex-end" className="prompt-preview-quick-actions">
+                <AppButton leftSection={<IconPlus size={16} />} onClick={addVariable} variant="light">
+                  Добавить
+                </AppButton>
+              </Group>
 
               {Object.keys(variablesMap).length ? (
                 <AppTable>
@@ -265,24 +268,24 @@ export function PromptPreviewSection() {
           />
 
           <Group justify="space-between">
-            <Button variant="default" onClick={importFromJson}>
+            <AppButton variant="default" onClick={importFromJson}>
               Импортировать JSON в таблицу
-            </Button>
-            <Button type="submit" loading={previewMutation.isPending}>
+            </AppButton>
+            <AppButton type="submit" loading={previewMutation.isPending}>
               Сгенерировать
-            </Button>
+            </AppButton>
           </Group>
 
           {jsonError ? (
-            <Alert color="red" title="Ошибка ввода" variant="light">
+            <AppInlineErrorAlert title="Ошибка ввода">
               {jsonError}
-            </Alert>
+            </AppInlineErrorAlert>
           ) : null}
 
           {previewMutation.isError ? (
-            <Alert color="red" title="Ошибка" variant="light">
+            <AppInlineErrorAlert>
               {getErrorMessage(previewMutation.error, 'Не удалось сгенерировать предпросмотр')}
-            </Alert>
+            </AppInlineErrorAlert>
           ) : null}
         </Stack>
       </form>
@@ -300,3 +303,5 @@ export function PromptPreviewSection() {
     </Stack>
   )
 }
+
+

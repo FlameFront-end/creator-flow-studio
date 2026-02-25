@@ -1,4 +1,5 @@
-import { Button, Group, Paper, Select, SimpleGrid, Stack, Textarea, TextInput, Title } from '@mantine/core'
+import { Group, Paper, Select, SimpleGrid, Stack, Textarea, TextInput, Title } from '@ui/core'
+import { AppButton } from '../../../shared/components/AppButton'
 import type { IdeasLabController } from '../hooks/useIdeasLabController'
 
 export const IdeasGenerationPanel = ({ controller }: { controller: IdeasLabController }) => {
@@ -34,9 +35,9 @@ export const IdeasGenerationPanel = ({ controller }: { controller: IdeasLabContr
             value={controller.format}
             onChange={(value) => controller.setFormat((value as typeof controller.format) ?? 'reel')}
             data={[
-              { value: 'reel', label: 'Reel' },
-              { value: 'short', label: 'Short' },
-              { value: 'tiktok', label: 'TikTok' },
+              { value: 'reel', label: 'Рилс' },
+              { value: 'short', label: 'Шортс' },
+              { value: 'tiktok', label: 'ТикТок' },
             ]}
             allowDeselect={false}
           />
@@ -57,16 +58,19 @@ export const IdeasGenerationPanel = ({ controller }: { controller: IdeasLabContr
             onChange={(event) => controller.setCount(event.currentTarget.value)}
             w={260}
           />
-          <Button
+          <AppButton
+            buttonVariant="dark"
             loading={controller.generateIdeasMutation.isPending}
             onClick={controller.startIdeaGeneration}
             disabled={!controller.projectId || !controller.personaId}
           >
             Сгенерировать идеи
-          </Button>
+          </AppButton>
         </Group>
       </Stack>
     </Paper>
   )
 }
+
+
 

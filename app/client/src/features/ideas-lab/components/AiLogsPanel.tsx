@@ -1,4 +1,9 @@
-﻿import { Badge, Button, Group, Paper, Stack, Text, Tooltip, Title } from '@mantine/core'
+﻿import { Group, Paper, Stack, Text, Title, Tooltip } from '@ui/core'
+
+import { IconTrash } from '@tabler/icons-react'
+
+import { AppBadge } from '../../../shared/components/AppBadge'
+import { AppButton } from '../../../shared/components/AppButton'
 import { AppTable } from '../../../shared/components/AppTable'
 import { formatRuDateTime, formatRuNumber } from '../../../shared/lib/formatters'
 import type { IdeasLabController } from '../hooks/useIdeasLabController'
@@ -26,24 +31,24 @@ export const AiLogsPanel = ({ controller }: { controller: IdeasLabController }) 
         <Group justify="space-between" align="center" wrap="wrap">
           <Title order={4}>Логи прогонов AI</Title>
           <Group gap="xs" wrap="wrap" justify="flex-end">
-            <Badge variant="light">Всего: {logsStats.total}</Badge>
-            <Badge color="green" variant="light">
+            <AppBadge variant="light">Всего: {logsStats.total}</AppBadge>
+            <AppBadge color="green" variant="light">
               Успех: {logsStats.successCount}
-            </Badge>
-            <Badge color="red" variant="light">
+            </AppBadge>
+            <AppBadge color="red" variant="light">
               Ошибка: {logsStats.failedCount}
-            </Badge>
-            <Badge color="cyan" variant="light">
+            </AppBadge>
+            <AppBadge color="cyan" variant="light">
               Средняя задержка: {logsStats.avgLatencyMs} мс
-            </Badge>
-            <Badge color="grape" variant="light">
+            </AppBadge>
+            <AppBadge color="grape" variant="light">
               Токены: {formatRuNumber(logsStats.totalTokens)}
-            </Badge>
-            <Button size="xs" variant="default" onClick={() => controller.setIsLogsCollapsed((prev) => !prev)}>
+            </AppBadge>
+            <AppButton size="xs" variant="default" onClick={() => controller.setIsLogsCollapsed((prev) => !prev)}>
               {controller.isLogsCollapsed ? 'Развернуть таблицу' : 'Свернуть таблицу'}
-            </Button>
+            </AppButton>
             {showClearLogsButton ? (
-              <Button
+              <AppButton
                 size="xs"
                 variant="default"
                 color="red"
@@ -51,7 +56,7 @@ export const AiLogsPanel = ({ controller }: { controller: IdeasLabController }) 
                 onClick={() => controller.setClearLogsModalOpen(true)}
               >
                 Очистить логи
-              </Button>
+              </AppButton>
             ) : null}
           </Group>
         </Group>
@@ -71,9 +76,9 @@ export const AiLogsPanel = ({ controller }: { controller: IdeasLabController }) 
                   <AppTable.Th>Модель</AppTable.Th>
                   <AppTable.Th>Токены</AppTable.Th>
                   <AppTable.Th>Задержка</AppTable.Th>
-                  <AppTable.Th>Request ID</AppTable.Th>
+                  <AppTable.Th>ID запроса</AppTable.Th>
                   <AppTable.Th>Ошибка</AppTable.Th>
-                  <AppTable.Th />
+                  <AppTable.Th className="w-[72px] text-right">Действия</AppTable.Th>
                 </AppTable.Tr>
               </AppTable.Thead>
               <AppTable.Tbody>
@@ -82,7 +87,7 @@ export const AiLogsPanel = ({ controller }: { controller: IdeasLabController }) 
                     <AppTable.Td>{formatRuDateTime(log.createdAt)}</AppTable.Td>
                     <AppTable.Td>{formatOperationLabel(log.operation)}</AppTable.Td>
                     <AppTable.Td>
-                      <Badge color={statusColor[log.status] ?? 'gray'}>{formatStatusLabel(log.status)}</Badge>
+                      <AppBadge color={statusColor[log.status] ?? 'gray'}>{formatStatusLabel(log.status)}</AppBadge>
                     </AppTable.Td>
                     <AppTable.Td>
                       <Stack gap={2}>
@@ -106,10 +111,20 @@ export const AiLogsPanel = ({ controller }: { controller: IdeasLabController }) 
                       )}
                     </AppTable.Td>
                     <AppTable.Td>{log.error ?? '-'}</AppTable.Td>
-                    <AppTable.Td>
-                      <Button size="xs" color="red" variant="subtle" onClick={() => controller.setDeleteLogId(log.id)}>
-                        Удалить
-                      </Button>
+                    <AppTable.Td className="text-right">
+                      <Tooltip label="Удалить лог" withArrow>
+                        <AppButton
+                          size="xs"
+                          color="red"
+                          variant="subtle"
+                          disabled={controller.removeLogMutation.isPending}
+                          onClick={() => controller.removeLogMutation.mutate(log.id)}
+                          aria-label="Удалить лог"
+                          className="h-8 w-8 p-0"
+                        >
+                          <IconTrash size={14} />
+                        </AppButton>
+                      </Tooltip>
                     </AppTable.Td>
                   </AppTable.Tr>
                 ))}
@@ -121,3 +136,8 @@ export const AiLogsPanel = ({ controller }: { controller: IdeasLabController }) 
     </Paper>
   )
 }
+
+
+
+
+

@@ -48,6 +48,9 @@ export class Idea {
   @Column({ type: 'text', nullable: true })
   imagePrompt!: string | null;
 
+  @Column({ type: 'text', nullable: true })
+  videoPrompt!: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

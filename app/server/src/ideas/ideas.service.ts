@@ -30,12 +30,19 @@ import { LLM_PROVIDER_TOKEN } from './llm/llm-provider.interface';
 import type { LlmProvider } from './llm/llm-provider.interface';
 import { PromptService } from '../prompt/prompt.service';
 import { PromptTemplateKey } from '../prompt-templates/entities/prompt-template.entity';
+import { buildMockImagePrompt } from './mock/ai-test-fallback';
+import { LocalObjectStorageService } from '../storage/local-object-storage.service';
 
 @Injectable()
 export class IdeasService {
+  private static readonly MOCK_PROVIDER_NAME = 'mock-test-fallback';
+  private static readonly MOCK_MODEL_NAME = 'mock-ai';
+  private readonly aiTestMode = this.toBoolean(process.env.AI_TEST_MODE, false);
+
   constructor(
     private readonly aiQueueService: AiQueueService,
     private readonly promptService: PromptService,
+    private readonly objectStorageService: LocalObjectStorageService,
     @Inject(LLM_PROVIDER_TOKEN)
     private readonly llmProvider: LlmProvider,
     @InjectRepository(Project)
@@ -195,6 +202,27 @@ Return JSON with shape:
 
       return { prompt };
     } catch (error) {
+      if (this.shouldUseMockFallback(error)) {
+        const prompt = buildMockImagePrompt();
+        await this.ideasRepository.update(idea.id, { imagePrompt: prompt });
+        await this.logsRepository.save(
+          this.logsRepository.create({
+            provider: IdeasService.MOCK_PROVIDER_NAME,
+            model: IdeasService.MOCK_MODEL_NAME,
+            operation: AiOperation.IMAGE_PROMPT,
+            projectId: idea.projectId,
+            ideaId: idea.id,
+            status: GenerationStatus.SUCCEEDED,
+            latencyMs: Date.now() - startedAt,
+            tokens: 0,
+            requestId: null,
+            error: null,
+          }),
+        );
+
+        return { prompt };
+      }
+
       await this.logsRepository.save(
         this.logsRepository.create({
           provider: this.llmProvider.name,
@@ -217,10 +245,107 @@ Return JSON with shape:
     }
   }
 
+  async generateVideoPrompt(ideaId: string) {
+    const idea = await this.ideasRepository.findOne({ where: { id: ideaId } });
+    if (!idea) {
+      throw new NotFoundException('Idea not found');
+    }
+
+    const startedAt = Date.now();
+    try {
+      const promptPreview = await this.promptService.preview({
+        personaId: idea.personaId,
+        templateKey: PromptTemplateKey.VIDEO_PROMPT,
+        variables: {
+          topic: idea.topic,
+          idea_topic: idea.topic,
+          hook: idea.hook,
+          idea_hook: idea.hook,
+          format: idea.format,
+        },
+      });
+      const response = await this.llmProvider.generateJson<{ prompt?: unknown }>({
+        prompt: `${promptPreview.prompt}
+
+Return JSON with shape:
+{
+  "prompt":"detailed video prompt"
+}`,
+        maxTokens: 900,
+        temperature: 0.7,
+      });
+
+      const prompt = this.normalizeImagePrompt(response.data);
+      await this.ideasRepository.update(idea.id, { videoPrompt: prompt });
+      await this.logsRepository.save(
+        this.logsRepository.create({
+          provider: this.llmProvider.name,
+          model: response.model,
+          operation: AiOperation.VIDEO_PROMPT,
+          projectId: idea.projectId,
+          ideaId: idea.id,
+          status: GenerationStatus.SUCCEEDED,
+          latencyMs: Date.now() - startedAt,
+          tokens: response.tokens,
+          requestId: response.requestId,
+          error: null,
+        }),
+      );
+
+      return { prompt };
+    } catch (error) {
+      if (this.shouldUseMockFallback(error)) {
+        const prompt = buildMockImagePrompt();
+        await this.ideasRepository.update(idea.id, { videoPrompt: prompt });
+        await this.logsRepository.save(
+          this.logsRepository.create({
+            provider: IdeasService.MOCK_PROVIDER_NAME,
+            model: IdeasService.MOCK_MODEL_NAME,
+            operation: AiOperation.VIDEO_PROMPT,
+            projectId: idea.projectId,
+            ideaId: idea.id,
+            status: GenerationStatus.SUCCEEDED,
+            latencyMs: Date.now() - startedAt,
+            tokens: 0,
+            requestId: null,
+            error: null,
+          }),
+        );
+
+        return { prompt };
+      }
+
+      await this.logsRepository.save(
+        this.logsRepository.create({
+          provider: this.llmProvider.name,
+          model:
+            process.env.LLM_MODEL ??
+            process.env.OPENROUTER_MODEL ??
+            process.env.OPENAI_MODEL ??
+            'unknown-model',
+          operation: AiOperation.VIDEO_PROMPT,
+          projectId: idea.projectId,
+          ideaId: idea.id,
+          status: GenerationStatus.FAILED,
+          latencyMs: Date.now() - startedAt,
+          tokens: null,
+          requestId: null,
+          error: this.toErrorMessage(error),
+        }),
+      );
+      throw error;
+    }
+  }
+
   async enqueueImageGeneration(ideaId: string, dto: GenerateImageDto) {
     const idea = await this.ideasRepository.findOne({ where: { id: ideaId } });
     if (!idea) {
       throw new NotFoundException('Idea not found');
+    }
+    if (!idea.imagePrompt?.trim()) {
+      throw new ConflictException(
+        'Image prompt is empty. Generate image prompt first.',
+      );
     }
 
     const hasCompleted = await this.assetsRepository.exists({
@@ -262,6 +387,11 @@ Return JSON with shape:
     if (!idea) {
       throw new NotFoundException('Idea not found');
     }
+    if (!idea.videoPrompt?.trim()) {
+      throw new ConflictException(
+        'Video prompt is empty. Generate video prompt first.',
+      );
+    }
 
     const hasCompleted = await this.assetsRepository.exists({
       where: {
@@ -280,7 +410,7 @@ Return JSON with shape:
       this.assetsRepository.create({
         ideaId,
         type: AssetType.VIDEO,
-        sourcePrompt: idea.imagePrompt,
+        sourcePrompt: idea.videoPrompt,
         status: GenerationStatus.QUEUED,
       }),
     );
@@ -338,13 +468,51 @@ Return JSON with shape:
       }
     }
 
-    const latestImagesByIdea = new Map<string, Asset>();
+    const currentImagesByIdea = new Map<string, Asset>();
+    const currentVideosByIdea = new Map<string, Asset>();
+    const latestImageStatusByIdea = new Map<string, GenerationStatus>();
+    const latestVideoStatusByIdea = new Map<string, GenerationStatus>();
+    const imageAssetsCountByIdea = new Map<string, number>();
+    const videoAssetsCountByIdea = new Map<string, number>();
+    const imageSucceededCountByIdea = new Map<string, number>();
+    const videoSucceededCountByIdea = new Map<string, number>();
     for (const asset of assets) {
-      if (asset.type !== AssetType.IMAGE) {
+      if (asset.type === AssetType.IMAGE) {
+        if (!latestImageStatusByIdea.has(asset.ideaId)) {
+          latestImageStatusByIdea.set(asset.ideaId, asset.status);
+        }
+        imageAssetsCountByIdea.set(
+          asset.ideaId,
+          (imageAssetsCountByIdea.get(asset.ideaId) ?? 0) + 1,
+        );
+        if (asset.status === GenerationStatus.SUCCEEDED) {
+          imageSucceededCountByIdea.set(
+            asset.ideaId,
+            (imageSucceededCountByIdea.get(asset.ideaId) ?? 0) + 1,
+          );
+          if (!currentImagesByIdea.has(asset.ideaId)) {
+            currentImagesByIdea.set(asset.ideaId, asset);
+          }
+        }
         continue;
       }
-      if (!latestImagesByIdea.has(asset.ideaId)) {
-        latestImagesByIdea.set(asset.ideaId, asset);
+      if (asset.type === AssetType.VIDEO) {
+        if (!latestVideoStatusByIdea.has(asset.ideaId)) {
+          latestVideoStatusByIdea.set(asset.ideaId, asset.status);
+        }
+        videoAssetsCountByIdea.set(
+          asset.ideaId,
+          (videoAssetsCountByIdea.get(asset.ideaId) ?? 0) + 1,
+        );
+        if (asset.status === GenerationStatus.SUCCEEDED) {
+          videoSucceededCountByIdea.set(
+            asset.ideaId,
+            (videoSucceededCountByIdea.get(asset.ideaId) ?? 0) + 1,
+          );
+          if (!currentVideosByIdea.has(asset.ideaId)) {
+            currentVideosByIdea.set(asset.ideaId, asset);
+          }
+        }
       }
     }
 
@@ -352,7 +520,14 @@ Return JSON with shape:
       ...idea,
       latestScript: latestScriptsByIdea.get(idea.id) ?? null,
       latestCaption: latestCaptionsByIdea.get(idea.id) ?? null,
-      latestImage: latestImagesByIdea.get(idea.id) ?? null,
+      latestImage: currentImagesByIdea.get(idea.id) ?? null,
+      latestVideo: currentVideosByIdea.get(idea.id) ?? null,
+      latestImageStatus: latestImageStatusByIdea.get(idea.id) ?? null,
+      latestVideoStatus: latestVideoStatusByIdea.get(idea.id) ?? null,
+      imageAssetsCount: imageAssetsCountByIdea.get(idea.id) ?? 0,
+      videoAssetsCount: videoAssetsCountByIdea.get(idea.id) ?? 0,
+      imageSucceededCount: imageSucceededCountByIdea.get(idea.id) ?? 0,
+      videoSucceededCount: videoSucceededCountByIdea.get(idea.id) ?? 0,
     }));
   }
 
@@ -436,6 +611,24 @@ Return JSON with shape:
     return { deleted: 1 };
   }
 
+  async removeAsset(assetId: string) {
+    const asset = await this.assetsRepository.findOne({ where: { id: assetId } });
+    if (!asset) {
+      throw new NotFoundException('Asset not found');
+    }
+
+    if (asset.url) {
+      await this.objectStorageService.removeByPublicUrl(asset.url);
+    }
+
+    const result = await this.assetsRepository.delete({ id: assetId });
+    if (!result.affected) {
+      throw new NotFoundException('Asset not found');
+    }
+
+    return { deleted: 1 };
+  }
+
   private async ensureProjectExists(projectId: string): Promise<void> {
     const exists = await this.projectsRepository.existsBy({ id: projectId });
     if (!exists) {
@@ -461,6 +654,29 @@ Return JSON with shape:
     if (error instanceof Error && error.message) {
       return error.message.slice(0, 500);
     }
-    return 'Unknown image prompt generation error';
+    return 'Unknown prompt generation error';
+  }
+
+  private shouldUseMockFallback(error: unknown): boolean {
+    if (!this.aiTestMode) {
+      return false;
+    }
+    return this.toErrorMessage(error)
+      .toLowerCase()
+      .includes('is not configured for ai generation');
+  }
+
+  private toBoolean(value: string | undefined, fallback: boolean): boolean {
+    if (value == null) {
+      return fallback;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+      return true;
+    }
+    if (['0', 'false', 'no', 'off'].includes(normalized)) {
+      return false;
+    }
+    return fallback;
   }
 }

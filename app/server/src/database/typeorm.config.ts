@@ -11,7 +11,11 @@ import { Script } from '../ideas/entities/script.entity';
 import { Caption } from '../ideas/entities/caption.entity';
 import { AiRunLog } from '../ideas/entities/ai-run-log.entity';
 import { Asset } from '../ideas/entities/asset.entity';
+import { ModerationCheck } from '../post-drafts/entities/moderation-check.entity';
+import { PostDraft } from '../post-drafts/entities/post-draft.entity';
 import { Step4AssetsImageVideo1730013000000 } from './migrations/1730013000000-step4-assets-image-video';
+import { Step5ApprovalAndExport1730014000000 } from './migrations/1730014000000-step5-approval-and-export';
+import { Step6VideoPrompt1730015000000 } from './migrations/1730015000000-step6-video-prompt';
 
 const toNumber = (value: string | undefined, fallback: number): number => {
   const parsed = Number(value);
@@ -35,12 +39,16 @@ export const buildTypeOrmOptions = (): DataSourceOptions => ({
     Caption,
     AiRunLog,
     Asset,
+    PostDraft,
+    ModerationCheck,
   ],
   migrations: [
     InitSchema1730010000000,
     Step2PersonaPolicyTemplate1730011000000,
     Step3IdeasAndScripts1730012000000,
     Step4AssetsImageVideo1730013000000,
+    Step5ApprovalAndExport1730014000000,
+    Step6VideoPrompt1730015000000,
   ],
   synchronize: false,
   migrationsRun: true,

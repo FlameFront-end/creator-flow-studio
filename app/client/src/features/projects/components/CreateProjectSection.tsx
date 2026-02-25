@@ -1,4 +1,7 @@
-﻿import { Alert, Button, Group, Paper, Stack, TextInput, Textarea, Title } from '@mantine/core'
+import { Group, Paper, Stack, Textarea, TextInput, Title } from '@ui/core'
+
+import { AppInlineErrorAlert } from '../../../shared/components/AppInlineErrorAlert'
+import { AppButton } from '../../../shared/components/AppButton'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -127,23 +130,27 @@ export function CreateProjectSection({
             />
             <Group justify="flex-end">
               {isEditing ? (
-                <Button variant="default" onClick={onCancelEdit} disabled={isPending}>
+                <AppButton variant="default" onClick={onCancelEdit} disabled={isPending}>
                   Отмена
-                </Button>
+                </AppButton>
               ) : null}
-              <Button type="submit" loading={isPending}>
+              <AppButton type="submit" loading={isPending}>
                 {isEditing ? 'Сохранить изменения' : 'Создать'}
-              </Button>
+              </AppButton>
             </Group>
           </Stack>
         </form>
 
         {mutationError ? (
-          <Alert color="red" title="Ошибка" variant="light">
+          <AppInlineErrorAlert>
             {getErrorMessage(mutationError, isEditing ? 'Не удалось обновить проект' : 'Не удалось создать проект')}
-          </Alert>
+          </AppInlineErrorAlert>
         ) : null}
       </Stack>
     </Paper>
   )
 }
+
+
+
+

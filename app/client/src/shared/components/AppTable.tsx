@@ -1,43 +1,40 @@
-import { Table } from '@mantine/core'
-import type { TableProps } from '@mantine/core'
-import type { CSSProperties, ReactElement } from 'react'
+import type { ReactElement, TableHTMLAttributes } from 'react'
+import { cn } from '../lib/cn'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from './ui/table'
 
-type AppTableComponent = ((props: TableProps) => ReactElement) & {
-  Thead: typeof Table.Thead
-  Tbody: typeof Table.Tbody
-  Tr: typeof Table.Tr
-  Th: typeof Table.Th
-  Td: typeof Table.Td
+type AppTableProps = TableHTMLAttributes<HTMLTableElement>
+
+type AppTableComponent = ((props: AppTableProps) => ReactElement) & {
+  Thead: typeof TableHeader
+  Tbody: typeof TableBody
+  Tr: typeof TableRow
+  Th: typeof TableHead
+  Td: typeof TableCell
 }
 
-const AppTableBase = ({ className, style, ...props }: TableProps) => {
-  const mergedClassName = ['app-table', className].filter(Boolean).join(' ')
-  const tableVars = {
-    '--table-highlight-on-hover-color': 'rgba(56, 189, 248, 0.02)',
-    '--table-striped-color': 'rgba(148, 163, 184, 0.02)',
-  }
-  const mergedStyle = {
-    ...tableVars,
-    ...((style as CSSProperties | undefined) ?? {}),
-  } as CSSProperties
-
+const AppTableBase = ({ className, ...props }: AppTableProps) => {
   return (
     <Table
-      withTableBorder
-      withColumnBorders
-      striped={false}
-      highlightOnHover
       {...props}
-      className={mergedClassName}
-      style={mergedStyle}
+      className={cn(
+        'app-table',
+        className,
+      )}
     />
   )
 }
 
 export const AppTable = Object.assign(AppTableBase, {
-  Thead: Table.Thead,
-  Tbody: Table.Tbody,
-  Tr: Table.Tr,
-  Th: Table.Th,
-  Td: Table.Td,
+  Thead: TableHeader,
+  Tbody: TableBody,
+  Tr: TableRow,
+  Th: TableHead,
+  Td: TableCell,
 }) as AppTableComponent

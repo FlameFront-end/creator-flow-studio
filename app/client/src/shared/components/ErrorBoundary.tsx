@@ -1,4 +1,5 @@
-import { Button, Group, Paper, Stack, Text, Title } from '@mantine/core'
+﻿import { Group, Paper, Stack, Text, Title } from '@ui/core'
+import { AppButton } from '../../shared/components/AppButton'
 import { Component } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 
@@ -48,10 +49,10 @@ export class ErrorBoundary extends Component<Props, State> {
               {this.state.error?.message ?? 'Произошла непредвиденная ошибка интерфейса'}
             </Text>
             <Group mt="sm">
-              <Button onClick={this.handleReload}>Перезагрузить страницу</Button>
-              <Button variant="default" onClick={this.handleGoHome}>
+              <AppButton onClick={this.handleReload}>Перезагрузить страницу</AppButton>
+              <AppButton variant="default" onClick={this.handleGoHome}>
                 На главную
-              </Button>
+              </AppButton>
             </Group>
           </Stack>
         </Paper>

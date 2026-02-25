@@ -1,12 +1,16 @@
-import { Group, Paper, SimpleGrid, Stack, Text, ThemeIcon, Title } from '@mantine/core'
-import { quickStartSteps, aboutIcons } from '../model/about.content'
+import { Group, Paper, SimpleGrid, Stack, Text, ThemeIcon, Title } from '@ui/core'
+
+import { AppButton } from '../../../shared/components/AppButton'
+import { useNavigate } from 'react-router-dom'
+import { aboutIcons, quickStartSteps } from '../model/about.content'
 
 export const QuickStartSection = () => {
   const QuickStartIcon = aboutIcons.quickStart
+  const navigate = useNavigate()
 
   return (
     <Paper className="panel-surface" radius={24} p="lg">
-      <Stack gap="md">
+      <Stack gap="lg">
         <Group gap="xs">
           <ThemeIcon variant="light" color="cyan" radius="xl">
             <QuickStartIcon size={16} />
@@ -22,12 +26,25 @@ export const QuickStartSection = () => {
                 </ThemeIcon>
                 <Text fw={700}>{step.title}</Text>
                 <Text size="sm" c="dimmed">{step.description}</Text>
+                <AppButton
+                  size="xs"
+                  variant="subtle"
+                  w="fit-content"
+                  leftSection={<step.icon size={14} />}
+                  onClick={() => navigate(step.route)}
+                >
+                  {step.actionLabel}
+                </AppButton>
               </Stack>
             </Paper>
           ))}
         </SimpleGrid>
+
       </Stack>
     </Paper>
   )
 }
+
+
+
 

@@ -1,6 +1,6 @@
-import { Box, Loader } from '@mantine/core'
 import { memo } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { Spinner } from '../../shared/components/ui/spinner'
 import { ROUTES } from '../../shared/model/routes'
 import { useAuthToken } from '../../shared/lib/auth'
 
@@ -10,9 +10,9 @@ export const AppRoutes = memo(() => {
 
   if (token === undefined) {
     return (
-      <Box mih="100vh" style={{ display: 'grid', placeItems: 'center' }}>
-        <Loader size="lg" />
-      </Box>
+      <div className="grid min-h-screen place-items-center">
+        <Spinner className="h-8 w-8 text-muted-foreground" />
+      </div>
     )
   }
 

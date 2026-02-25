@@ -6,6 +6,7 @@ export enum AiOperation {
   SCRIPT = 'script',
   CAPTION = 'caption',
   IMAGE_PROMPT = 'image_prompt',
+  VIDEO_PROMPT = 'video_prompt',
   IMAGE = 'image',
   VIDEO = 'video',
 }

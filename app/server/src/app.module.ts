@@ -11,6 +11,7 @@ import { PolicyRulesModule } from './policy-rules/policy-rules.module';
 import { PromptModule } from './prompt/prompt.module';
 import { PromptTemplatesModule } from './prompt-templates/prompt-templates.module';
 import { PersonasModule } from './personas/personas.module';
+import { PostDraftsModule } from './post-drafts/post-drafts.module';
 import { ProjectsModule } from './projects/projects.module';
 
 @Module({
@@ -30,6 +31,7 @@ import { ProjectsModule } from './projects/projects.module';
     PromptTemplatesModule,
     PromptModule,
     IdeasModule,
+    PostDraftsModule,
   ],
   providers: [
     {

@@ -1,4 +1,6 @@
-import { Badge, Group, Paper, Stack, Text, ThemeIcon, Title } from '@mantine/core'
+import { Group, Paper, Stack, Text, ThemeIcon, Title } from '@ui/core'
+
+import { AppBadge } from '../../../shared/components/AppBadge'
 import { aboutIcons, statusItems } from '../model/about.content'
 
 export const StatusesSection = () => {
@@ -14,10 +16,15 @@ export const StatusesSection = () => {
           <Title order={4}>Статусы задач</Title>
         </Group>
         {statusItems.map((item) => (
-          <Group key={item.title} gap="xs" wrap="wrap">
-            <Badge color={item.color} variant="light">{item.title}</Badge>
-            <Text size="sm" c="dimmed">{item.description}</Text>
-          </Group>
+          <Stack key={item.title} gap={4}>
+            <Group gap="xs" wrap="wrap">
+              <AppBadge color={item.color} variant="light">{item.title}</AppBadge>
+              <Text size="sm" c="dimmed">{item.description}</Text>
+            </Group>
+            <Text size="sm">
+              Что делать: <Text span c="dimmed">{item.action}</Text>
+            </Text>
+          </Stack>
         ))}
       </Stack>
     </Paper>

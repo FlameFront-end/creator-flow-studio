@@ -1,4 +1,14 @@
-import { Button, Group, Modal, Stack, Text } from '@mantine/core'
+﻿import { AppButton } from './AppButton'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog'
 
 type ConfirmActionModalProps = {
   opened: boolean
@@ -24,19 +34,32 @@ export function ConfirmActionModal({
   onClose,
 }: ConfirmActionModalProps) {
   return (
-    <Modal opened={opened} onClose={onClose} centered title={title} radius="md">
-      <Stack gap="md">
-        <Text>{message}</Text>
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onClose} disabled={loading}>
-            {cancelLabel}
-          </Button>
-          <Button color={confirmColor} onClick={onConfirm} loading={loading}>
-            {confirmLabel}
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
+    <AlertDialog
+      open={opened}
+      onOpenChange={(nextState) => {
+        if (!nextState) onClose()
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{message}</AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel asChild>
+            <AppButton variant="default" onClick={onClose} disabled={loading}>
+              {cancelLabel}
+            </AppButton>
+          </AlertDialogCancel>
+
+          <AlertDialogAction asChild>
+            <AppButton color={confirmColor} onClick={onConfirm} loading={loading}>
+              {confirmLabel}
+            </AppButton>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
-

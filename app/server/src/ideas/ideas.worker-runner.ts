@@ -40,6 +40,11 @@ import {
 } from './providers/video-provider.interface';
 import type { VideoProvider } from './providers/video-provider.interface';
 import { LocalObjectStorageService } from '../storage/local-object-storage.service';
+import {
+  buildMockCaption,
+  buildMockIdeas,
+  buildMockScript,
+} from './mock/ai-test-fallback';
 
 type IdeasResponse = {
   ideas?: Array<{
@@ -62,8 +67,11 @@ type CaptionResponse = {
 
 @Injectable()
 export class IdeasWorkerRunner implements OnModuleDestroy {
+  private static readonly MOCK_PROVIDER_NAME = 'mock-test-fallback';
+  private static readonly MOCK_MODEL_NAME = 'mock-ai';
   private readonly logger = new Logger(IdeasWorkerRunner.name);
   private worker: Worker | null = null;
+  private readonly aiTestMode = this.toBoolean(process.env.AI_TEST_MODE, false);
   private readonly maxScriptChars = this.toNumber(
     process.env.SCRIPT_MAX_CHARS,
     DEFAULT_MAX_SCRIPT_CHARS,
@@ -203,6 +211,35 @@ Return JSON with shape:
         model: response.model,
       });
     } catch (error) {
+      if (this.shouldUseMockFallback(error)) {
+        const mockIdeas = buildMockIdeas(job.data.count, job.data.format);
+        await this.ideasRepository.save(
+          mockIdeas.map((item) =>
+            this.ideasRepository.create({
+              projectId: job.data.projectId,
+              personaId: job.data.personaId,
+              topic: item.topic,
+              hook: item.hook,
+              format: item.format,
+              status: GenerationStatus.SUCCEEDED,
+            }),
+          ),
+        );
+
+        await this.createLog({
+          operation: AiOperation.IDEAS,
+          provider: IdeasWorkerRunner.MOCK_PROVIDER_NAME,
+          projectId: job.data.projectId,
+          ideaId: null,
+          status: GenerationStatus.SUCCEEDED,
+          latencyMs: Date.now() - startedAt,
+          tokens: 0,
+          requestId: null,
+          model: IdeasWorkerRunner.MOCK_MODEL_NAME,
+        });
+        return;
+      }
+
       if (this.shouldLogFailureForAttempt(job, error)) {
         await this.createLog({
           operation: AiOperation.IDEAS,
@@ -288,6 +325,28 @@ Return JSON with shape:
         model: response.model,
       });
     } catch (error) {
+      if (this.shouldUseMockFallback(error)) {
+        const mockScript = buildMockScript();
+        await this.scriptsRepository.update(script.id, {
+          text: mockScript.text,
+          shotList: mockScript.shotList,
+          status: GenerationStatus.SUCCEEDED,
+          error: null,
+        });
+        await this.createLog({
+          operation: AiOperation.SCRIPT,
+          provider: IdeasWorkerRunner.MOCK_PROVIDER_NAME,
+          projectId: idea.projectId,
+          ideaId: idea.id,
+          status: GenerationStatus.SUCCEEDED,
+          latencyMs: Date.now() - startedAt,
+          tokens: 0,
+          requestId: null,
+          model: IdeasWorkerRunner.MOCK_MODEL_NAME,
+        });
+        return;
+      }
+
       await this.failScript(script.id, this.toErrorMessage(error));
       if (this.shouldLogFailureForAttempt(job, error)) {
         await this.createLog({
@@ -374,6 +433,28 @@ Return JSON with shape:
         model: response.model,
       });
     } catch (error) {
+      if (this.shouldUseMockFallback(error)) {
+        const mockCaption = buildMockCaption();
+        await this.captionsRepository.update(caption.id, {
+          text: mockCaption.text,
+          hashtags: mockCaption.hashtags,
+          status: GenerationStatus.SUCCEEDED,
+          error: null,
+        });
+        await this.createLog({
+          operation: AiOperation.CAPTION,
+          provider: IdeasWorkerRunner.MOCK_PROVIDER_NAME,
+          projectId: idea.projectId,
+          ideaId: idea.id,
+          status: GenerationStatus.SUCCEEDED,
+          latencyMs: Date.now() - startedAt,
+          tokens: 0,
+          requestId: null,
+          model: IdeasWorkerRunner.MOCK_MODEL_NAME,
+        });
+        return;
+      }
+
       await this.failCaption(caption.id, this.toErrorMessage(error));
       if (this.shouldLogFailureForAttempt(job, error)) {
         await this.createLog({
@@ -492,12 +573,12 @@ Return JSON with shape:
     });
 
     try {
-      if (!idea.imagePrompt?.trim()) {
-        throw new Error('Image prompt is empty. Generate image prompt first.');
+      if (!idea.videoPrompt?.trim()) {
+        throw new Error('Video prompt is empty. Generate video prompt first.');
       }
 
       const generated = await this.videoProvider.generate({
-        prompt: idea.imagePrompt,
+        prompt: idea.videoPrompt,
         ideaId: idea.id,
       });
 
@@ -510,7 +591,7 @@ Return JSON with shape:
         height: generated.height,
         duration: generated.duration,
         url: generated.url,
-        sourcePrompt: idea.imagePrompt,
+        sourcePrompt: idea.videoPrompt,
       });
 
       await this.createLog({
@@ -664,6 +745,10 @@ Return JSON with shape:
     );
   }
 
+  private shouldUseMockFallback(error: unknown): boolean {
+    return this.aiTestMode && this.isProviderNotConfiguredError(error);
+  }
+
   private shouldLogFailureForAttempt(job: Job, error: unknown): boolean {
     if (this.isUnrecoverableError(error)) {
       return true;
@@ -685,9 +770,15 @@ Return JSON with shape:
   private isUnrecoverableError(error: unknown): boolean {
     const message = this.toErrorMessage(error).toLowerCase();
     return (
-      message.includes('is not configured for ai generation') ||
-      message.includes('prompt template') && message.includes('not found')
-    );  
+      this.isProviderNotConfiguredError(error) ||
+      (message.includes('prompt template') && message.includes('not found'))
+    );
+  }
+
+  private isProviderNotConfiguredError(error: unknown): boolean {
+    return this.toErrorMessage(error)
+      .toLowerCase()
+      .includes('is not configured for ai generation');
   }
 
   private toErrorMessage(error: unknown): string {
@@ -704,6 +795,20 @@ Return JSON with shape:
   private toNumber(value: string | undefined, fallback: number): number {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  private toBoolean(value: string | undefined, fallback: boolean): boolean {
+    if (value == null) {
+      return fallback;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+      return true;
+    }
+    if (['0', 'false', 'no', 'off'].includes(normalized)) {
+      return false;
+    }
+    return fallback;
   }
 
   private getConfiguredLlmModel(): string {

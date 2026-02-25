@@ -1,4 +1,6 @@
-import { Badge, Group, Stack, Text, ThemeIcon, Title } from '@mantine/core'
+import { Group, Stack, Text, ThemeIcon, Title } from '@ui/core'
+
+import { AppBadge } from '../../../shared/components/AppBadge'
 import { IconAlertTriangle } from '@tabler/icons-react'
 
 type ErrorHeaderProps = {
@@ -20,10 +22,11 @@ export const ErrorHeader = ({ message, isModuleLoadError }: ErrorHeaderProps) =>
           <Text c="dimmed" size="lg">{message}</Text>
         </Stack>
       </Group>
-      <Badge color={isModuleLoadError ? 'orange' : 'red'} size="lg" variant="light">
+      <AppBadge color={isModuleLoadError ? 'orange' : 'red'} size="lg" variant="light">
         {isModuleLoadError ? 'Проблема загрузки модулей' : 'Ошибка интерфейса'}
-      </Badge>
+      </AppBadge>
     </Group>
   )
 }
+
 
