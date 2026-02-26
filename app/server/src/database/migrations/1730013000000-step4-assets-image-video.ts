@@ -37,7 +37,7 @@ export class Step4AssetsImageVideo1730013000000 implements MigrationInterface {
       INSERT INTO "prompt_templates" ("key", "template")
       VALUES (
         'image_prompt',
-        'Create one high-quality vertical visual concept for this idea. Keep it realistic, cinematic and social-first. Include scene, composition, lighting, camera angle, mood, color palette and key objects. Output only a concise generation prompt based on topic={{topic}}, hook={{hook}}, format={{format}}.'
+        'Create one vertical 9:16 scene description for this idea. Answer only in the persona language ({{language}}) and include exactly one prompt. Describe setting, main subject, action, foreground and background elements, lighting, palette, camera angle, and mood. Keep it concise (max two sentences), avoid hashtags, emojis, brands and text overlays, and do not switch to languages other than {{language}}.'
       )
       ON CONFLICT ("key") DO NOTHING
     `);
