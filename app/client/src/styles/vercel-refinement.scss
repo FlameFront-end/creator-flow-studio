@@ -287,6 +287,30 @@ button {
   transition-duration: var(--app-motion-base);
 }
 
+[data-slot='input']:-webkit-autofill,
+[data-slot='input']:-webkit-autofill:hover,
+[data-slot='input']:-webkit-autofill:focus,
+[data-slot='textarea']:-webkit-autofill,
+[data-slot='textarea']:-webkit-autofill:hover,
+[data-slot='textarea']:-webkit-autofill:focus,
+.appui-Input-input:-webkit-autofill,
+.appui-Input-input:-webkit-autofill:hover,
+.appui-Input-input:-webkit-autofill:focus,
+.appui-Textarea-input:-webkit-autofill,
+.appui-Textarea-input:-webkit-autofill:hover,
+.appui-Textarea-input:-webkit-autofill:focus,
+.appui-Select-input:-webkit-autofill,
+.appui-Select-input:-webkit-autofill:hover,
+.appui-Select-input:-webkit-autofill:focus,
+.appui-NumberInput-input:-webkit-autofill,
+.appui-NumberInput-input:-webkit-autofill:hover,
+.appui-NumberInput-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--app-text) !important;
+  caret-color: var(--app-text) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--app-field-bg) inset !important;
+  box-shadow: 0 0 0 1000px var(--app-field-bg) inset !important;
+}
+
 [data-slot='input']:focus-visible,
 [data-slot='textarea']:focus-visible,
 .appui-Input-input:focus,
@@ -344,6 +368,8 @@ button {
 
 .app-inline-error-alert .appui-Alert-message {
   color: #ffe4e6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .app-inline-error-alert svg {

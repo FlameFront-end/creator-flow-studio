@@ -4,6 +4,7 @@ import {
   LlmJsonResponse,
   LlmProvider,
 } from './llm-provider.interface';
+import { LlmResponseError } from './llm-response.error';
 
 type OpenAiChatCompletionResponse = {
   id: string;
@@ -24,16 +25,24 @@ type OpenAiChatCompletionResponse = {
 @Injectable()
 export class OpenAiProvider implements LlmProvider {
   readonly name = 'openai';
-  private readonly apiKey = process.env.OPENAI_API_KEY ?? '';
-  private readonly model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
   private readonly endpoint = 'https://api.openai.com/v1/chat/completions';
 
   async generateJson<T>({
     prompt,
     maxTokens,
     temperature,
+    config,
   }: LlmJsonRequest): Promise<LlmJsonResponse<T>> {
-    if (!this.apiKey) {
+    const apiKey =
+      config?.provider === this.name
+        ? config.apiKey
+        : (process.env.OPENAI_API_KEY ?? '');
+    const model =
+      config?.provider === this.name
+        ? config.model
+        : (process.env.OPENAI_MODEL ?? 'gpt-4o-mini');
+
+    if (!apiKey) {
       throw new ServiceUnavailableException(
         'OPENAI_API_KEY is not configured for AI generation',
       );
@@ -42,11 +51,11 @@ export class OpenAiProvider implements LlmProvider {
     const response = await fetch(this.endpoint, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: this.model,
+        model,
         temperature,
         max_tokens: maxTokens,
         response_format: { type: 'json_object' },
@@ -66,33 +75,37 @@ export class OpenAiProvider implements LlmProvider {
 
     const payload = (await response.json()) as OpenAiChatCompletionResponse;
     if (!response.ok) {
-      throw new ServiceUnavailableException(
+      throw new LlmResponseError(
         payload.error?.message ?? 'OpenAI request failed',
+        'provider_request_failed',
+        { rawResponse: JSON.stringify(payload) },
       );
     }
 
     const content = payload.choices?.[0]?.message?.content?.trim();
     if (!content) {
-      throw new ServiceUnavailableException(
-        'OpenAI response is empty or malformed',
-      );
+      throw new LlmResponseError('OpenAI response is empty or malformed', 'empty_response', {
+        rawResponse: JSON.stringify(payload),
+      });
     }
 
     let parsed: T;
     try {
       parsed = JSON.parse(content) as T;
     } catch {
-      throw new ServiceUnavailableException(
+      throw new LlmResponseError(
         'OpenAI returned invalid JSON payload',
+        'invalid_json_payload',
+        { rawResponse: content },
       );
     }
 
     return {
-      model: payload.model || this.model,
+      provider: this.name,
+      model: payload.model || model,
       tokens: payload.usage?.total_tokens ?? null,
       requestId: response.headers.get('x-request-id'),
       data: parsed,
     };
   }
 }
-

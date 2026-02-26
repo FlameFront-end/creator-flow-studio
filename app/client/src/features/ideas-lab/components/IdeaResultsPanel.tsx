@@ -4,14 +4,13 @@ import { AppInlineErrorAlert } from '../../../shared/components/AppInlineErrorAl
 import { AppBadge } from '../../../shared/components/AppBadge'
 import { AppButton } from '../../../shared/components/AppButton'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ideasApi, type Caption, type Script } from '../../../shared/api/services/ideas.api'
 import { ConfirmActionModal } from '../../../shared/components/ConfirmActionModal'
 import { formatRuDateTime } from '../../../shared/lib/formatters'
 import { showErrorToast, showSuccessToast } from '../../../shared/lib/toast'
 import type { IdeasLabController } from '../hooks/useIdeasLabController'
 import {
-  IDEAS_OPEN_ADVANCED_SETTINGS_EVENT,
   ideaDetailsQueryKey,
   ideasQueryKey,
   postDraftLatestQueryKey,
@@ -31,15 +30,16 @@ const sortByDateDesc = <T extends { createdAt: string }>(items: T[]): T[] =>
 
 const pickDisplayScript = (scripts: Script[]): Script | null => {
   const sorted = sortByDateDesc(scripts)
-  return sorted.find((script) => Boolean(script.text?.trim())) ?? sorted[0] ?? null
+  return sorted[0] ?? null
 }
 
 const pickDisplayCaption = (captions: Caption[]): Caption | null => {
   const sorted = sortByDateDesc(captions)
-  return sorted.find((caption) => Boolean(caption.text?.trim())) ?? sorted[0] ?? null
+  return sorted[0] ?? null
 }
 
 const isSucceededStatus = (status: string | null | undefined) => status === 'succeeded'
+const INLINE_ERROR_PREVIEW_LIMIT = 180
 
 export const IdeaResultsPanel = ({
   controller,
@@ -50,6 +50,8 @@ export const IdeaResultsPanel = ({
   const hasIdeas = (controller.ideasQuery.data?.length ?? 0) > 0
   const [previewAsset, setPreviewAsset] = useState<AssetViewerPayload | null>(null)
   const [deleteAssetId, setDeleteAssetId] = useState<string | null>(null)
+  const [expandedScriptError, setExpandedScriptError] = useState(false)
+  const [expandedCaptionError, setExpandedCaptionError] = useState(false)
   const queryClient = useQueryClient()
 
   const displayedScript = useMemo(
@@ -62,19 +64,16 @@ export const IdeaResultsPanel = ({
     [detailsQuery.data?.captions],
   )
 
+  useEffect(() => {
+    setExpandedScriptError(false)
+  }, [displayedScript?.error, displayedScript?.id])
+
+  useEffect(() => {
+    setExpandedCaptionError(false)
+  }, [displayedCaption?.error, displayedCaption?.id])
+
   const openInNewWindow = (url: string) => {
     window.open(url, '_blank', 'noopener,noreferrer')
-  }
-
-  const openAdvancedSettings = () => {
-    if (!selectedIdea) return
-
-    controller.setSelectedIdeaId(selectedIdea.id)
-    window.dispatchEvent(
-      new CustomEvent(IDEAS_OPEN_ADVANCED_SETTINGS_EVENT, {
-        detail: { ideaId: selectedIdea.id },
-      }),
-    )
   }
 
   const removeAssetMutation = useMutation({
@@ -162,7 +161,37 @@ export const IdeaResultsPanel = ({
                           ))}
                         </Stack>
                       ) : null}
-                      {displayedScript.error ? <AppInlineErrorAlert>{displayedScript.error}</AppInlineErrorAlert> : null}
+                      {displayedScript.error ? (
+                        <AppInlineErrorAlert>
+                          <Text
+                            size="sm"
+                            lineClamp={expandedScriptError ? undefined : 2}
+                            style={{ whiteSpace: expandedScriptError ? 'pre-wrap' : 'normal', overflowWrap: 'anywhere' }}
+                          >
+                            {displayedScript.error}
+                          </Text>
+                          {displayedScript.error.length > INLINE_ERROR_PREVIEW_LIMIT ? (
+                            <Text
+                              component="button"
+                              type="button"
+                              onClick={() => setExpandedScriptError((prev) => !prev)}
+                              style={{
+                                marginTop: 6,
+                                display: 'inline',
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                color: 'var(--app-muted-text)',
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                font: 'inherit',
+                              }}
+                            >
+                              {expandedScriptError ? 'Свернуть' : 'Показать полностью'}
+                            </Text>
+                          ) : null}
+                        </AppInlineErrorAlert>
+                      ) : null}
                     </Stack>
                   </Card>
                 )}
@@ -191,19 +220,63 @@ export const IdeaResultsPanel = ({
                       <Text size="sm" c="dimmed">
                         {displayedCaption.hashtags?.join(' ') || 'Без хэштегов'}
                       </Text>
-                      {displayedCaption.error ? <AppInlineErrorAlert>{displayedCaption.error}</AppInlineErrorAlert> : null}
+                      {displayedCaption.error ? (
+                        <AppInlineErrorAlert>
+                          <Text
+                            size="sm"
+                            lineClamp={expandedCaptionError ? undefined : 2}
+                            style={{ whiteSpace: expandedCaptionError ? 'pre-wrap' : 'normal', overflowWrap: 'anywhere' }}
+                          >
+                            {displayedCaption.error}
+                          </Text>
+                          {displayedCaption.error.length > INLINE_ERROR_PREVIEW_LIMIT ? (
+                            <Text
+                              component="button"
+                              type="button"
+                              onClick={() => setExpandedCaptionError((prev) => !prev)}
+                              style={{
+                                marginTop: 6,
+                                display: 'inline',
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                color: 'var(--app-muted-text)',
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                font: 'inherit',
+                              }}
+                            >
+                              {expandedCaptionError ? 'Свернуть' : 'Показать полностью'}
+                            </Text>
+                          ) : null}
+                        </AppInlineErrorAlert>
+                      ) : null}
                     </Stack>
                   </Card>
                 )}
               </div>
             </div>
 
-            <Group justify="space-between" align="center" wrap="wrap">
-              <Title order={5} className="ideas-results-section-title">Ассеты</Title>
-              <AppButton size="xs" variant="subtle" color="gray" onClick={openAdvancedSettings}>
-                Настроить промпты
-              </AppButton>
-            </Group>
+            <div className="ideas-results-text-grid">
+              <div className="ideas-results-section">
+                <Title order={5} className="ideas-results-section-title">Промпт изображения</Title>
+                <Card withBorder radius="md" p="md" className="ideas-results-card">
+                  <Text size="sm" c={selectedIdea.imagePrompt ? undefined : 'dimmed'}>
+                    {selectedIdea.imagePrompt ?? 'Промпт изображения еще не сгенерирован'}
+                  </Text>
+                </Card>
+              </div>
+              <div className="ideas-results-section">
+                <Title order={5} className="ideas-results-section-title">Промпт видео</Title>
+                <Card withBorder radius="md" p="md" className="ideas-results-card">
+                  <Text size="sm" c={selectedIdea.videoPrompt ? undefined : 'dimmed'}>
+                    {selectedIdea.videoPrompt ?? 'Промпт видео еще не сгенерирован'}
+                  </Text>
+                </Card>
+              </div>
+            </div>
+
+            <Title order={5} className="ideas-results-section-title">Ассеты</Title>
             {!detailsQuery.data?.assets.length ? (
               <Text c="dimmed" className="ideas-results-empty-text">Ассеты пока не сгенерированы</Text>
             ) : (

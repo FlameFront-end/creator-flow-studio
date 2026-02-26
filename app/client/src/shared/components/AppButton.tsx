@@ -3,7 +3,7 @@ import { cn } from '../lib/cn'
 import { Button, buttonVariants } from './ui/button'
 import { Spinner } from './ui/spinner'
 
-export type AppButtonVariant = 'dark' | 'white' | 'red' | 'text' | 'custom'
+export type AppButtonVariant = 'dark' | 'white' | 'red' | 'text' | 'muted' | 'custom'
 export type LegacyAppButtonVariant = 'primary' | 'secondary' | 'danger'
 type LegacyButtonVariant =
   | 'filled'
@@ -75,6 +75,7 @@ const resolveUiVariant = (
     return 'destructive'
   }
   if (resolvedVariant === 'text') return 'ghost'
+  if (resolvedVariant === 'muted') return 'outline'
   if (legacyVariant === 'subtle') return 'ghost'
   if (legacyVariant === 'filled') return 'default'
   return 'outline'
@@ -99,6 +100,9 @@ const textColorClassMap: Record<string, string> = {
 const outlineColorClassMap: Record<string, string> = {
   red: 'border-red-300/70 text-red-700 hover:bg-red-500/8 dark:border-red-700/70 dark:text-red-300 dark:hover:bg-red-500/14',
 }
+
+const mutedVariantClassName =
+  'border-zinc-300/70 bg-zinc-100/70 text-zinc-700 hover:bg-zinc-200/70 dark:border-zinc-700/70 dark:bg-zinc-800/45 dark:text-zinc-200 dark:hover:bg-zinc-700/55'
 
 export function AppButton({
   buttonVariant,
@@ -130,6 +134,8 @@ export function AppButton({
       ? textColorClassMap[color] ?? undefined
       : resolvedButtonVariant === 'red' && color
         ? outlineColorClassMap[color] ?? undefined
+        : resolvedButtonVariant === 'muted'
+          ? mutedVariantClassName
         : undefined
 
   return (

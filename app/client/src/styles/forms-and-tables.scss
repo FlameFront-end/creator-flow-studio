@@ -233,6 +233,37 @@ $field-required: '.appui-Input-required, .appui-Textarea-required, .appui-Select
   background: rgba(12, 13, 16, 0.94);
 }
 
+.projects-page-redesign {
+  .projects-page-heading {
+    row-gap: 8px;
+  }
+
+  .projects-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 999px;
+    padding: 4px 9px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #c8d4ef;
+    background: rgba(15, 23, 42, 0.28);
+  }
+
+  .projects-create-col {
+    .panel-surface {
+      position: sticky;
+      top: 14px;
+      align-self: start;
+    }
+  }
+}
+
+.projects-empty-state {
+  border: 1px dashed rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.26);
+}
+
 .projects-table {
   min-width: 700px;
 
@@ -420,6 +451,19 @@ $field-required: '.appui-Input-required, .appui-Textarea-required, .appui-Select
     background: rgba(255, 255, 255, 0.92);
   }
 
+  .projects-page-redesign {
+    .projects-stat-chip {
+      border-color: rgba(148, 163, 184, 0.42);
+      background: rgba(241, 245, 249, 0.74);
+      color: #1e293b;
+    }
+  }
+
+  .projects-empty-state {
+    border-color: rgba(148, 163, 184, 0.42);
+    background: rgba(248, 250, 252, 0.9);
+  }
+
   .app-table {
     thead th {
       background: rgba(231, 238, 249, 0.95);
@@ -441,5 +485,15 @@ $field-required: '.appui-Input-required, .appui-Textarea-required, .appui-Select
         background: rgba(56, 189, 248, 0.08) !important;
       }
     }
+  }
+}
+
+@media (max-width: 75em) {
+  .projects-page-redesign .projects-page-heading {
+    align-items: flex-start;
+  }
+
+  .projects-page-redesign .projects-create-col .panel-surface {
+    position: static;
   }
 }

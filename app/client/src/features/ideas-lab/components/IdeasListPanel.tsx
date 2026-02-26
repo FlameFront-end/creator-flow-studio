@@ -1,25 +1,31 @@
-import { Box, Card, Collapse, Group, Loader, Paper, Progress, Stack, Text, ThemeIcon, Title } from '@ui/core'
+import { Card, Group, Loader, Paper, Progress, Stack, Text, ThemeIcon, Title } from '@ui/core'
 
 
 import { AppBadge } from '../../../shared/components/AppBadge'
 import { AppButton } from '../../../shared/components/AppButton'
-import { IconCheck, IconChevronDown, IconCircleDashed } from '@tabler/icons-react'
+import { IconCheck, IconCircleDashed } from '@tabler/icons-react'
 import { useEffect, useMemo, useState } from 'react'
 import { TransientErrorAlert } from '../../../shared/components/TransientErrorAlert'
 import { getErrorMessage } from '../../../shared/lib/httpError'
 import type { IdeasLabController } from '../hooks/useIdeasLabController'
-import { IDEAS_OPEN_ADVANCED_SETTINGS_EVENT } from '../model/ideasLab.constants'
 import { formatIdeaFormatLabel, formatStatusLabel } from '../lib/ideasLab.formatters'
 
-const IDEA_PIPELINE_STEP_COUNT = 4
+const IDEA_PIPELINE_STEP_COUNT = 6
 
-type IdeaStepKey = 'script' | 'caption' | 'image' | 'video'
+type IdeaStepKey =
+  | 'script'
+  | 'caption'
+  | 'image_prompt'
+  | 'video_prompt'
+  | 'image'
+  | 'video'
 
 type IdeaStepState = {
   key: IdeaStepKey
   label: string
   done: boolean
   status: string
+  statusColor: string
 }
 
 type StepAction = {
@@ -28,10 +34,6 @@ type StepAction = {
   disabled?: boolean
   disabledHint?: string
   onClick: () => void
-}
-
-type OpenAdvancedSettingsEventDetail = {
-  ideaId?: string
 }
 
 type IdeasListPanelProps = {
@@ -53,7 +55,6 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
   }, [controller.count])
   const showClearIdeasButton = Boolean(controller.projectId) && hasIdeas
   const [transientError, setTransientError] = useState<string | null>(null)
-  const [expandedIdeaId, setExpandedIdeaId] = useState<string | null>(null)
 
   useEffect(() => {
     if (controller.generateScriptMutation.isError) {
@@ -129,27 +130,6 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
     controller.generateVideoMutation.isError,
   ])
 
-  useEffect(() => {
-    const handleOpenAdvancedSettings = (event: Event) => {
-      const customEvent = event as CustomEvent<OpenAdvancedSettingsEventDetail>
-      const ideaId = customEvent.detail?.ideaId
-      if (!ideaId) return
-
-      controller.setSelectedIdeaId(ideaId)
-      setExpandedIdeaId(ideaId)
-
-      window.requestAnimationFrame(() => {
-        const ideaCard = document.getElementById(`ideas-lab-idea-card-${ideaId}`)
-        ideaCard?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      })
-    }
-
-    window.addEventListener(IDEAS_OPEN_ADVANCED_SETTINGS_EVENT, handleOpenAdvancedSettings)
-    return () => {
-      window.removeEventListener(IDEAS_OPEN_ADVANCED_SETTINGS_EVENT, handleOpenAdvancedSettings)
-    }
-  }, [controller.setSelectedIdeaId])
-
   return (
     <Paper className="panel-surface ideas-list-panel" radius={24} p="lg">
       <Stack gap="sm">
@@ -158,7 +138,7 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
             <Title order={4}>Список идей</Title>
             {showHeaderHint ? (
               <Text size="xs" c="dimmed">
-                Нажмите на карточку, чтобы выбрать идею. Подготовка промптов вынесена в "Расширенные настройки".
+                Нажмите на карточку, чтобы выбрать идею. Все этапы генерации доступны в едином списке.
               </Text>
             ) : null}
           </Stack>
@@ -214,7 +194,7 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
                       </Stack>
 
                       <Stack gap={8}>
-                        {Array.from({ length: 4 }).map((_, stepIndex) => (
+                        {Array.from({ length: IDEA_PIPELINE_STEP_COUNT }).map((_, stepIndex) => (
                           <Group key={`ideas-skeleton-step-${index}-${stepIndex}`} justify="space-between" wrap="nowrap">
                             <Group gap="xs" wrap="nowrap">
                               <div className="ideas-skeleton-dot" />
@@ -227,10 +207,6 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
                           </Group>
                         ))}
                       </Stack>
-
-                      <Group justify="center">
-                        <div className="ideas-skeleton-pill ideas-skeleton-pill-advanced" />
-                      </Group>
                     </Stack>
                   </Card>
                 ))}
@@ -248,6 +224,12 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
           ideas.map((idea) => {
             const scriptDone = idea.latestScript?.status === 'succeeded'
             const captionDone = idea.latestCaption?.status === 'succeeded'
+            const scriptRunning = idea.latestScript?.status === 'running'
+            const captionRunning = idea.latestCaption?.status === 'running'
+            const scriptFailed = idea.latestScript?.status === 'failed'
+            const captionFailed = idea.latestCaption?.status === 'failed'
+            const hasSucceededScript = (idea.scriptSucceededCount ?? 0) > 0
+            const hasSucceededCaption = (idea.captionSucceededCount ?? 0) > 0
             const imagePromptDone = Boolean(idea.imagePrompt)
             const videoPromptDone = Boolean(idea.videoPrompt)
             const imageSucceededCount =
@@ -262,6 +244,10 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
             const hasAnyVideo = videoSucceededCount > 0
             const imagePendingCount = Math.max(0, imageTotalCount - imageSucceededCount)
             const videoPendingCount = Math.max(0, videoTotalCount - videoSucceededCount)
+            const imageRunning = idea.latestImageStatus === 'running'
+            const videoRunning = idea.latestVideoStatus === 'running'
+            const imageFailed = idea.latestImageStatus === 'failed'
+            const videoFailed = idea.latestVideoStatus === 'failed'
 
             const scriptCreatePending =
               controller.generateScriptMutation.isPending &&
@@ -291,7 +277,7 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
               ? formatStatusLabel('running')
               : imagePromptDone
                 ? formatStatusLabel('succeeded')
-                : 'Промпт не подготовлен'
+                : 'Ожидает'
 
             const videoPromptPending =
               controller.generateVideoPromptMutation.isPending &&
@@ -301,7 +287,7 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
               ? formatStatusLabel('running')
               : videoPromptDone
                 ? formatStatusLabel('succeeded')
-                : 'Промпт не подготовлен'
+                : 'Ожидает'
 
             const imageCreatePending =
               controller.generateImageMutation.isPending &&
@@ -329,12 +315,28 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
                 label: 'Сценарий',
                 done: scriptDone,
                 status: formatStatusLabel(idea.latestScript?.status ?? 'queued'),
+                statusColor: resolveStepStatusColor(formatStatusLabel(idea.latestScript?.status ?? 'queued')),
               },
               {
                 key: 'caption',
                 label: 'Подпись',
                 done: captionDone,
                 status: formatStatusLabel(idea.latestCaption?.status ?? 'queued'),
+                statusColor: resolveStepStatusColor(formatStatusLabel(idea.latestCaption?.status ?? 'queued')),
+              },
+              {
+                key: 'image_prompt',
+                label: 'Промпт изображения',
+                done: imagePromptDone,
+                status: imagePromptStatusLabel,
+                statusColor: resolveStepStatusColor(imagePromptStatusLabel),
+              },
+              {
+                key: 'video_prompt',
+                label: 'Промпт видео',
+                done: videoPromptDone,
+                status: videoPromptStatusLabel,
+                statusColor: resolveStepStatusColor(videoPromptStatusLabel),
               },
               {
                 key: 'image',
@@ -347,6 +349,15 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
                   : imagePromptDone
                     ? formatStatusLabel(idea.latestImageStatus ?? 'queued')
                     : 'Ожидает промпт',
+                statusColor: resolveStepStatusColor(
+                  hasAnyImage
+                    ? imagePendingCount > 0
+                      ? 'Успех, в очереди'
+                      : 'Успех'
+                    : imagePromptDone
+                      ? formatStatusLabel(idea.latestImageStatus ?? 'queued')
+                      : 'Ожидает промпт',
+                ),
               },
               {
                 key: 'video',
@@ -359,6 +370,15 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
                   : videoPromptDone
                     ? formatStatusLabel(idea.latestVideoStatus ?? 'queued')
                     : 'Ожидает промпт',
+                statusColor: resolveStepStatusColor(
+                  hasAnyVideo
+                    ? videoPendingCount > 0
+                      ? 'Успех, в очереди'
+                      : 'Успех'
+                    : videoPromptDone
+                      ? formatStatusLabel(idea.latestVideoStatus ?? 'queued')
+                      : 'Ожидает промпт',
+                ),
               },
             ]
 
@@ -366,14 +386,20 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
             const pipelineProgress = Math.round((completedStepCount / IDEA_PIPELINE_STEP_COUNT) * 100)
             const selected = controller.selectedIdeaId === idea.id
             const isIdeaFailed = idea.status === 'failed'
-            const isAdvancedOpen = expandedIdeaId === idea.id
 
             const getStepAction = (stepKey: IdeaStepKey): StepAction => {
               if (stepKey === 'script') {
-                const useRegenerateAction = scriptDone || scriptRegenPending
+                const useRegenerateAction =
+                  hasSucceededScript || scriptDone || scriptRegenPending
                 return {
-                  label: useRegenerateAction ? 'Новая версия' : 'Создать',
-                  loading: useRegenerateAction ? scriptRegenPending : scriptCreatePending,
+                  label: scriptFailed
+                    ? 'Повторить'
+                    : useRegenerateAction
+                      ? 'Новая версия'
+                      : 'Создать',
+                  loading:
+                    (useRegenerateAction ? scriptRegenPending : scriptCreatePending) ||
+                    scriptRunning,
                   onClick: () =>
                     controller.generateScriptMutation.mutate({
                       ideaId: idea.id,
@@ -383,10 +409,17 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
               }
 
               if (stepKey === 'caption') {
-                const useRegenerateAction = captionDone || captionRegenPending
+                const useRegenerateAction =
+                  hasSucceededCaption || captionDone || captionRegenPending
                 return {
-                  label: useRegenerateAction ? 'Новая версия' : 'Создать',
-                  loading: useRegenerateAction ? captionRegenPending : captionCreatePending,
+                  label: captionFailed
+                    ? 'Повторить'
+                    : useRegenerateAction
+                      ? 'Новая версия'
+                      : 'Создать',
+                  loading:
+                    (useRegenerateAction ? captionRegenPending : captionCreatePending) ||
+                    captionRunning,
                   onClick: () =>
                     controller.generateCaptionMutation.mutate({
                       ideaId: idea.id,
@@ -395,11 +428,33 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
                 }
               }
 
+              if (stepKey === 'image_prompt') {
+                return {
+                  label: imagePromptDone ? 'Новая версия' : 'Создать',
+                  loading: imagePromptPending,
+                  onClick: () => controller.generateImagePromptMutation.mutate(idea.id),
+                }
+              }
+
+              if (stepKey === 'video_prompt') {
+                return {
+                  label: videoPromptDone ? 'Новая версия' : 'Создать',
+                  loading: videoPromptPending,
+                  onClick: () => controller.generateVideoPromptMutation.mutate(idea.id),
+                }
+              }
+
               if (stepKey === 'image') {
                 const useRegenerateAction = hasAnyImage || imageRegenPending
                 return {
-                  label: useRegenerateAction ? 'Новая версия' : 'Сгенерировать',
-                  loading: useRegenerateAction ? imageRegenPending : imageCreatePending,
+                  label: imageFailed
+                    ? 'Повторить'
+                    : useRegenerateAction
+                      ? 'Новая версия'
+                      : 'Создать',
+                  loading:
+                    (useRegenerateAction ? imageRegenPending : imageCreatePending) ||
+                    imageRunning,
                   disabled: !imagePromptDone,
                   disabledHint: 'Сначала подготовьте промпт изображения.',
                   onClick: () =>
@@ -412,8 +467,14 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
 
               const useRegenerateAction = hasAnyVideo || videoRegenPending
               return {
-                label: useRegenerateAction ? 'Новая версия' : 'Сгенерировать',
-                loading: useRegenerateAction ? videoRegenPending : videoCreatePending,
+                label: videoFailed
+                  ? 'Повторить'
+                  : useRegenerateAction
+                    ? 'Новая версия'
+                    : 'Создать',
+                loading:
+                  (useRegenerateAction ? videoRegenPending : videoCreatePending) ||
+                  videoRunning,
                 disabled: !videoPromptDone,
                 disabledHint: 'Сначала подготовьте промпт видео.',
                 onClick: () =>
@@ -467,7 +528,7 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
                       {selected ? 'Выбрана' : 'Не выбрана'}
                     </AppBadge>
                     <AppBadge variant="light">
-                      Готово: {completedStepCount}/{IDEA_PIPELINE_STEP_COUNT}
+                      Выполнено: {completedStepCount}/{IDEA_PIPELINE_STEP_COUNT}
                     </AppBadge>
                   </Group>
 
@@ -501,7 +562,7 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
                               <Text size="sm">{step.label}</Text>
                             </Group>
                             <Group gap="xs" wrap="nowrap" align="center">
-                              <Text size="xs" c="dimmed">
+                              <Text size="0.70rem" c={step.statusColor}>
                                 {step.status}
                               </Text>
                               <AppButton
@@ -530,90 +591,6 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
                     })}
                   </Stack>
 
-                  <AppButton
-                    variant="subtle"
-                    color="gray"
-                    className="ideas-lab-advanced-toggle"
-                    rightSection={
-                      <Box
-                        component="span"
-                        style={{
-                          display: 'inline-flex',
-                          transform: isAdvancedOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                          transition: 'transform 140ms ease',
-                        }}
-                      >
-                        <IconChevronDown size={16} />
-                      </Box>
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      setExpandedIdeaId(isAdvancedOpen ? null : idea.id)
-                    }}
-                  >
-                    Расширенные настройки
-                  </AppButton>
-
-                  <Collapse in={isAdvancedOpen}>
-                    <div className="ideas-lab-advanced-panel-wrap">
-                      <Card withBorder radius="md" p="sm" className="ideas-lab-advanced-panel">
-                      <Stack gap="xs">
-                        <Group justify="space-between" align="center" wrap="wrap">
-                          <Stack gap={0}>
-                            <Text size="sm">Промпт изображения</Text>
-                            <Text size="xs" c="dimmed">
-                              {imagePromptStatusLabel}
-                            </Text>
-                          </Stack>
-                            <AppButton
-                              size="xs"
-                              loading={imagePromptPending}
-                              variant={imagePromptDone ? 'default' : 'light'}
-                              className="ideas-lab-step-action-btn"
-                              style={{ minWidth: 156 }}
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                controller.generateImagePromptMutation.mutate(idea.id)
-                              }}
-                            >
-                              {imagePromptPending
-                                ? null
-                                : imagePromptDone
-                                ? 'Новая версия'
-                                : 'Создать'}
-                            </AppButton>
-                        </Group>
-
-                        <Group justify="space-between" align="center" wrap="wrap">
-                          <Stack gap={0}>
-                            <Text size="sm">Промпт видео</Text>
-                            <Text size="xs" c="dimmed">
-                              {videoPromptStatusLabel}
-                            </Text>
-                          </Stack>
-                            <AppButton
-                              size="xs"
-                              loading={videoPromptPending}
-                              variant={videoPromptDone ? 'default' : 'light'}
-                              className="ideas-lab-step-action-btn"
-                              style={{ minWidth: 156 }}
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                controller.generateVideoPromptMutation.mutate(idea.id)
-                              }}
-                            >
-                              {videoPromptPending
-                                ? null
-                                : videoPromptDone
-                                ? 'Новая версия'
-                                : 'Создать'}
-                            </AppButton>
-                        </Group>
-                      </Stack>
-                      </Card>
-                    </div>
-                  </Collapse>
-
                   {isIdeaFailed ? (
                     <AppBadge color="red" variant="light">
                       Требует внимания
@@ -630,3 +607,11 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
     </Paper>
   )
 }
+  const resolveStepStatusColor = (status: string): string => {
+    const normalized = status.trim().toLowerCase()
+    if (normalized.includes('ошиб')) return 'red.4'
+    if (normalized.includes('успех') || normalized.includes('готов')) return 'green.4'
+    if (normalized.includes('в процессе') || normalized.includes('в очереди')) return 'cyan.4'
+    if (normalized.includes('ожидает')) return 'orange.4'
+    return 'dimmed'
+  }

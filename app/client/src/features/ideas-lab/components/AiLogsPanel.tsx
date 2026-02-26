@@ -1,6 +1,7 @@
-﻿import { Group, Paper, Stack, Text, Title, Tooltip } from '@ui/core'
+import { Group, Paper, Stack, Text, Title, Tooltip } from '@ui/core'
 
 import { IconTrash } from '@tabler/icons-react'
+import { useState } from 'react'
 
 import { AppBadge } from '../../../shared/components/AppBadge'
 import { AppButton } from '../../../shared/components/AppButton'
@@ -19,11 +20,101 @@ const formatTokens = (tokens: number | null) => {
   return formatRuNumber(tokens)
 }
 
+const LOG_ERROR_PREVIEW_LIMIT = 220
+
 export const AiLogsPanel = ({ controller }: { controller: IdeasLabController }) => {
   const { logsStats, logsQuery } = controller
   const logs = logsQuery.data ?? []
   const hasLogs = logs.length > 0
   const showClearLogsButton = Boolean(controller.projectId) && hasLogs
+  const [expandedErrors, setExpandedErrors] = useState<Record<string, boolean>>({})
+  const [expandedRaw, setExpandedRaw] = useState<Record<string, boolean>>({})
+
+  const toggleError = (logId: string) => {
+    setExpandedErrors((prev) => ({ ...prev, [logId]: !prev[logId] }))
+  }
+
+  const toggleRaw = (logId: string) => {
+    setExpandedRaw((prev) => ({ ...prev, [logId]: !prev[logId] }))
+  }
+
+  const renderLogError = (
+    logId: string,
+    error: string | null,
+    errorCode?: string | null,
+    rawResponse?: string | null,
+  ) => {
+    if (!error) {
+      return '-'
+    }
+
+    const expanded = Boolean(expandedErrors[logId])
+    const rawExpanded = Boolean(expandedRaw[logId])
+    const isLong = error.length > LOG_ERROR_PREVIEW_LIMIT
+    const value = expanded || !isLong ? error : `${error.slice(0, LOG_ERROR_PREVIEW_LIMIT)}...`
+
+    return (
+      <Stack gap={4}>
+        <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+          {errorCode ? `[${errorCode}] ` : ''}
+          {value}
+          {isLong ? (
+            <>
+              {' '}
+              <Text
+                component="button"
+                type="button"
+                onClick={() => toggleError(logId)}
+                style={{
+                  display: 'inline',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  margin: 0,
+                  color: 'var(--app-muted-text)',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  font: 'inherit',
+                }}
+              >
+                {expanded ? 'Свернуть' : 'Показать полностью'}
+              </Text>
+            </>
+          ) : null}
+        </Text>
+        {rawResponse ? (
+          <Text size="xs" c="dimmed" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+            {rawExpanded || rawResponse.length <= LOG_ERROR_PREVIEW_LIMIT
+              ? rawResponse
+              : `${rawResponse.slice(0, LOG_ERROR_PREVIEW_LIMIT)}...`}
+            {rawResponse.length > LOG_ERROR_PREVIEW_LIMIT ? (
+              <>
+                {' '}
+                <Text
+                  component="button"
+                  type="button"
+                  onClick={() => toggleRaw(logId)}
+                  style={{
+                    display: 'inline',
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    margin: 0,
+                    color: 'var(--app-muted-text)',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    font: 'inherit',
+                  }}
+                >
+                  {rawExpanded ? 'Свернуть raw' : 'Показать raw'}
+                </Text>
+              </>
+            ) : null}
+          </Text>
+        ) : null}
+      </Stack>
+    )
+  }
 
   return (
     <Paper className="panel-surface" radius={24} p="lg">
@@ -111,7 +202,9 @@ export const AiLogsPanel = ({ controller }: { controller: IdeasLabController }) 
                         '-'
                       )}
                     </AppTable.Td>
-                    <AppTable.Td>{log.error ?? '-'}</AppTable.Td>
+                    <AppTable.Td>
+                      {renderLogError(log.id, log.error, log.errorCode ?? null, log.rawResponse ?? null)}
+                    </AppTable.Td>
                     <AppTable.Td className="text-right">
                       <Tooltip label="Удалить лог" withArrow>
                         <AppButton
@@ -144,8 +237,3 @@ export const AiLogsPanel = ({ controller }: { controller: IdeasLabController }) 
     </Paper>
   )
 }
-
-
-
-
-

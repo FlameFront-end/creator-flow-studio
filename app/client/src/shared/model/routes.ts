@@ -45,7 +45,7 @@ export const isIdeasLabWorkspaceRoute = (
 export const buildIdeasLabRoute = (workspace: IdeasLabWorkspaceRoute) =>
   `/dashboard/ideas-lab/${workspace}`
 
-export type PromptStudioWorkspaceRoute = 'personas' | 'rules' | 'templates' | 'preview'
+export type PromptStudioWorkspaceRoute = 'personas' | 'rules' | 'templates' | 'preview' | 'providers'
 
 export const buildPromptStudioRoute = (workspace: PromptStudioWorkspaceRoute) =>
   `/dashboard/prompt-studio/${workspace}`

@@ -1,13 +1,13 @@
-import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { AppLogger } from './common/logging/app-logger';
 import { IdeasWorkerRunner } from './ideas/ideas.worker-runner';
 
 async function bootstrap() {
+  const logger = new AppLogger('WorkerBootstrap', 'worker');
   const app = await NestFactory.createApplicationContext(AppModule, {
-    logger: ['log', 'error', 'warn'],
+    logger,
   });
-  const logger = new Logger('WorkerBootstrap');
 
   const runner = app.get(IdeasWorkerRunner);
   runner.start();
@@ -21,13 +21,21 @@ async function bootstrap() {
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+  process.on('unhandledRejection', (reason) => {
+    logger.error(
+      reason instanceof Error ? reason.message : 'Unhandled rejection',
+      reason instanceof Error ? reason.stack : undefined,
+    );
+  });
+  process.on('uncaughtException', (error) => {
+    logger.error(error.message, error.stack);
+  });
 }
 
 bootstrap().catch((error: unknown) => {
-  const logger = new Logger('WorkerBootstrap');
+  const logger = new AppLogger('WorkerBootstrap', 'worker');
   logger.error(
     error instanceof Error ? error.message : 'Unknown bootstrap error',
   );
   process.exit(1);
 });
-

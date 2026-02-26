@@ -158,11 +158,32 @@ export const glossaryItems = [
   { term: 'Логи', description: 'История запусков с результатом, временем и ошибками.' },
 ] as const
 
+export const lmStudioGuide = {
+  title: 'LM Studio: подробная настройка',
+  description:
+    'Инструкция для локальной модели через Local Server (OpenAI-compatible API).',
+  steps: [
+    'Установите и откройте LM Studio.',
+    'Скачайте модель и загрузите её в память.',
+    'Откройте вкладку Local Server и запустите сервер.',
+    'Скопируйте Base URL из LM Studio (обычно http://127.0.0.1:1234). Суффикс /v1 добавится автоматически.',
+    'В Creator Flow Studio откройте Настройки ИИ -> Провайдер ИИ.',
+    'Выберите Local (LM Studio / OpenAI-compatible).',
+    'Укажите модель и Base URL.',
+    'Нажмите Проверить подключение, затем Сохранить.',
+  ],
+  docsUrl: 'https://lmstudio.ai/docs/local-server',
+  docsLabel: 'Документация LM Studio (Local Server)',
+  appRoute: buildPromptStudioRoute('providers'),
+  appLabel: 'Открыть настройки провайдера ИИ',
+} as const
+
 export const aboutIcons = {
   quickStart: IconChecklist,
   statuses: IconFileText,
   troubleshooting: IconBulb,
   scenarios: IconListDetails,
+  lmStudio: IconSettings,
   faq: IconBulb,
   glossary: IconBook2,
 }

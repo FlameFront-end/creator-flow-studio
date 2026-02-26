@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'node:path';
 import { AppModule } from './app.module';
+import { AppLogger } from './common/logging/app-logger';
 
 const DEFAULT_CORS_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173'];
 
@@ -23,7 +24,11 @@ const resolveCorsOrigins = (): string[] => {
 };
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const logger = new AppLogger('HTTP', 'server');
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: false,
+  });
+  app.useLogger(logger);
   const corsOrigins = resolveCorsOrigins();
   app.enableCors({
     origin: corsOrigins.includes('*') ? true : corsOrigins,

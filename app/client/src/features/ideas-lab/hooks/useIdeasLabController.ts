@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ideasApi, type Idea, type IdeaFormat } from '../../../shared/api/services/ideas.api'
 import { personasApi } from '../../../shared/api/services/personas.api'
 import { projectsApi } from '../../../shared/api/services/projects.api'
@@ -22,6 +22,16 @@ import {
 import { getIdeasLogsStats } from '../model/ideasLab.logs'
 import { validateStartIdeasGeneration } from '../model/ideasLab.validation'
 
+const isActiveStatus = (status: string | null | undefined): boolean =>
+  status === 'queued' || status === 'running'
+
+const hasActiveIdeaGeneration = (idea: Idea): boolean =>
+  isActiveStatus(idea.status) ||
+  isActiveStatus(idea.latestScript?.status) ||
+  isActiveStatus(idea.latestCaption?.status) ||
+  isActiveStatus(idea.latestImageStatus) ||
+  isActiveStatus(idea.latestVideoStatus)
+
 export const useIdeasLabController = () => {
   const queryClient = useQueryClient()
 
@@ -38,7 +48,7 @@ export const useIdeasLabController = () => {
   const [deleteLogId, setDeleteLogId] = useState<string | null>(null)
   const [isLogsCollapsed, setIsLogsCollapsed] = useState<boolean>(readIdeasLogsCollapsed)
   const [isWaitingForIdeas, setIsWaitingForIdeas] = useState(false)
-  const waitingIdeasTimerRef = useRef<number | null>(null)
+  const [ideasGenerationBaselineLogIds, setIdeasGenerationBaselineLogIds] = useState<string[] | null>(null)
 
   const projectsQuery = useQuery({ queryKey: PROJECTS_QUERY_KEY, queryFn: projectsApi.getProjects })
   const personasQuery = useQuery({ queryKey: PERSONAS_QUERY_KEY, queryFn: personasApi.getPersonas })
@@ -63,26 +73,58 @@ export const useIdeasLabController = () => {
     queryKey: ideasQueryKey(projectId),
     queryFn: () => ideasApi.getIdeas(projectId as string),
     enabled: Boolean(projectId),
-    refetchInterval: 4000,
+    refetchInterval: (query) => {
+      if (isWaitingForIdeas) {
+        return 1000
+      }
+      const ideas = (query.state.data as Idea[] | undefined) ?? []
+      return ideas.some(hasActiveIdeaGeneration) ? 1000 : false
+    },
   })
 
-  useEffect(() => {
-    return () => {
-      if (waitingIdeasTimerRef.current !== null) {
-        window.clearTimeout(waitingIdeasTimerRef.current)
+  const logsQuery = useQuery({
+    queryKey: aiLogsQueryKey(projectId),
+    queryFn: () => ideasApi.getLogs(projectId as string),
+    enabled: Boolean(projectId),
+    refetchInterval: () => {
+      if (isWaitingForIdeas) {
+        return 1000
       }
-    }
-  }, [])
+      const ideas = ideasQuery.data ?? []
+      return ideas.some(hasActiveIdeaGeneration) ? 1000 : false
+    },
+  })
 
   useEffect(() => {
     if ((ideasQuery.data?.length ?? 0) > 0) {
       setIsWaitingForIdeas(false)
-      if (waitingIdeasTimerRef.current !== null) {
-        window.clearTimeout(waitingIdeasTimerRef.current)
-        waitingIdeasTimerRef.current = null
-      }
+      setIdeasGenerationBaselineLogIds(null)
     }
   }, [ideasQuery.data])
+
+  useEffect(() => {
+    if (!isWaitingForIdeas || ideasGenerationBaselineLogIds === null || !logsQuery.data?.length) {
+      return
+    }
+
+    const baselineLogIds = new Set(ideasGenerationBaselineLogIds)
+    const hasFinalLogForCurrentRequest = logsQuery.data.some((log) => {
+      if (log.operation !== 'ideas') {
+        return false
+      }
+      if (baselineLogIds.has(log.id)) {
+        return false
+      }
+      return log.status === 'failed' || log.status === 'succeeded'
+    })
+
+    if (!hasFinalLogForCurrentRequest) {
+      return
+    }
+
+    setIsWaitingForIdeas(false)
+    setIdeasGenerationBaselineLogIds(null)
+  }, [ideasGenerationBaselineLogIds, isWaitingForIdeas, logsQuery.data])
 
   useEffect(() => {
     const ideas = ideasQuery.data ?? []
@@ -133,14 +175,16 @@ export const useIdeasLabController = () => {
     queryKey: ideaDetailsQueryKey(selectedIdeaId),
     queryFn: () => ideasApi.getIdea(selectedIdeaId as string),
     enabled: Boolean(selectedIdeaId),
-    refetchInterval: 4000,
-  })
-
-  const logsQuery = useQuery({
-    queryKey: aiLogsQueryKey(projectId),
-    queryFn: () => ideasApi.getLogs(projectId as string),
-    enabled: Boolean(projectId),
-    refetchInterval: 4000,
+    refetchInterval: (query) => {
+      const details = query.state.data
+      if (!details) {
+        return false
+      }
+      const hasActiveScripts = details.scripts.some((item) => isActiveStatus(item.status))
+      const hasActiveCaptions = details.captions.some((item) => isActiveStatus(item.status))
+      const hasActiveAssets = details.assets.some((item) => isActiveStatus(item.status))
+      return hasActiveScripts || hasActiveCaptions || hasActiveAssets ? 1000 : false
+    },
   })
 
   const invalidateAll = async () => {
@@ -160,7 +204,11 @@ export const useIdeasLabController = () => {
   const generateIdeasMutation = useMutation({
     mutationFn: ideasApi.generateIdeas,
     onSuccess: invalidateAll,
-    onError: (error) => showErrorToast(error, 'Не удалось поставить задачу в очередь'),
+    onError: (error) => {
+      setIsWaitingForIdeas(false)
+      setIdeasGenerationBaselineLogIds(null)
+      showErrorToast(error, 'Не удалось поставить задачу в очередь')
+    },
   })
 
   const generateScriptMutation = useMutation({
@@ -294,14 +342,10 @@ export const useIdeasLabController = () => {
     }
 
     generateIdeasMutation.mutate(validated)
+    setIdeasGenerationBaselineLogIds(
+      (logsQuery.data ?? []).filter((log) => log.operation === 'ideas').map((log) => log.id),
+    )
     setIsWaitingForIdeas(true)
-    if (waitingIdeasTimerRef.current !== null) {
-      window.clearTimeout(waitingIdeasTimerRef.current)
-    }
-    waitingIdeasTimerRef.current = window.setTimeout(() => {
-      setIsWaitingForIdeas(false)
-      waitingIdeasTimerRef.current = null
-    }, 30000)
     return true
   }
 

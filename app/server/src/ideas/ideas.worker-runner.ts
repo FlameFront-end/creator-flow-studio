@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Job } from 'bullmq';
 import { UnrecoverableError, Worker } from 'bullmq';
 import { Repository } from 'typeorm';
+import { AiSettingsService } from '../ai-settings/ai-settings.service';
+import type { AiRuntimeConfig } from '../ai-settings/ai-settings.types';
 import { PromptService } from '../prompt/prompt.service';
 import { PromptTemplateKey } from '../prompt-templates/entities/prompt-template.entity';
 import {
@@ -21,7 +23,6 @@ import { Script } from './entities/script.entity';
 import {
   AI_GENERATION_QUEUE,
   AiJobName,
-  DEFAULT_LLM_MAX_TOKENS,
   DEFAULT_MAX_HASHTAGS,
   DEFAULT_MAX_SCRIPT_CHARS,
   DEFAULT_MAX_SHOTS,
@@ -30,6 +31,7 @@ import {
   LLM_PROVIDER_TOKEN,
 } from './llm/llm-provider.interface';
 import type { LlmProvider } from './llm/llm-provider.interface';
+import { LlmResponseError } from './llm/llm-response.error';
 import { buildRedisConnection } from './redis.config';
 import {
   IMAGE_PROVIDER_TOKEN,
@@ -49,8 +51,11 @@ import {
 type IdeasResponse = {
   ideas?: Array<{
     topic?: unknown;
+    title?: unknown;
     hook?: unknown;
+    description?: unknown;
     format?: unknown;
+    type?: unknown;
   }>;
 };
 
@@ -58,6 +63,19 @@ type ScriptResponse = {
   text?: unknown;
   script?: unknown;
   shotList?: unknown;
+  content?: unknown;
+  output?: unknown;
+  result?: unknown;
+  message?: unknown;
+  shots?: unknown;
+  scenes?: unknown;
+  steps?: unknown;
+  reel?: unknown;
+  storyboard?: unknown;
+  reel_title?: unknown;
+  duration?: unknown;
+  theme?: unknown;
+  structure?: unknown;
 };
 
 type CaptionResponse = {
@@ -76,12 +94,9 @@ export class IdeasWorkerRunner implements OnModuleDestroy {
     process.env.SCRIPT_MAX_CHARS,
     DEFAULT_MAX_SCRIPT_CHARS,
   );
-  private readonly llmMaxTokens = this.toNumber(
-    process.env.LLM_MAX_TOKENS,
-    DEFAULT_LLM_MAX_TOKENS,
-  );
 
   constructor(
+    private readonly aiSettingsService: AiSettingsService,
     @Inject(LLM_PROVIDER_TOKEN)
     private readonly llmProvider: LlmProvider,
     @Inject(IMAGE_PROVIDER_TOKEN)
@@ -157,7 +172,9 @@ export class IdeasWorkerRunner implements OnModuleDestroy {
 
   private async handleGenerateIdeas(job: Job<GenerateIdeasJobData>) {
     const startedAt = Date.now();
+    let runtimeConfig: AiRuntimeConfig | null = null;
     try {
+      runtimeConfig = await this.aiSettingsService.getRuntimeConfig();
       const promptPreview = await this.promptService.preview({
         personaId: job.data.personaId,
         templateKey: PromptTemplateKey.IDEAS,
@@ -171,20 +188,28 @@ export class IdeasWorkerRunner implements OnModuleDestroy {
       const response = await this.llmProvider.generateJson<IdeasResponse>({
         prompt: `${promptPreview.prompt}
 
-Return JSON with shape:
+STRICT OUTPUT CONTRACT:
+- Return a single JSON object only.
+- Do not use markdown code fences.
+- Do not include explanations or extra keys.
+- Required shape:
 {
   "ideas": [
     {"topic":"...", "hook":"...", "format":"reel|short|tiktok"}
   ]
 }
+If unavailable, return {"ideas": []}.
 `,
-        maxTokens: this.llmMaxTokens,
+        maxTokens: runtimeConfig.maxTokens,
         temperature: 0.7,
+        config: runtimeConfig,
       });
 
       const ideas = this.normalizeIdeas(response.data, job.data.format);
       if (!ideas.length) {
-        throw new Error('LLM returned an empty ideas list');
+        throw new Error(
+          `LLM returned an empty ideas list. Response preview: ${this.previewUnknown(response.data)}`,
+        );
       }
 
       await this.ideasRepository.save(
@@ -208,10 +233,11 @@ Return JSON with shape:
         latencyMs: Date.now() - startedAt,
         tokens: response.tokens,
         requestId: response.requestId,
+        provider: response.provider,
         model: response.model,
       });
     } catch (error) {
-      if (this.shouldUseMockFallback(error)) {
+      if (this.shouldUseMockFallback(error, runtimeConfig)) {
         const mockIdeas = buildMockIdeas(job.data.count, job.data.format);
         await this.ideasRepository.save(
           mockIdeas.map((item) =>
@@ -241,16 +267,22 @@ Return JSON with shape:
       }
 
       if (this.shouldLogFailureForAttempt(job, error)) {
+        const failedConfig =
+          runtimeConfig ?? (await this.aiSettingsService.getRuntimeConfig());
+        const details = this.extractErrorDetails(error);
         await this.createLog({
           operation: AiOperation.IDEAS,
+          provider: failedConfig.provider,
           projectId: job.data.projectId,
           ideaId: null,
           status: GenerationStatus.FAILED,
           latencyMs: Date.now() - startedAt,
           tokens: null,
           requestId: null,
-          model: this.getConfiguredLlmModel(),
-          error: this.toErrorMessage(error),
+          model: failedConfig.model || 'unknown-model',
+          error: details.message,
+          errorCode: details.code,
+          rawResponse: details.rawResponse,
         });
       }
       throw this.toQueueError(error);
@@ -259,6 +291,7 @@ Return JSON with shape:
 
   private async handleGenerateScript(job: Job<GenerateScriptJobData>) {
     const startedAt = Date.now();
+    let runtimeConfig: AiRuntimeConfig | null = null;
     const script = await this.scriptsRepository.findOne({
       where: { id: job.data.scriptId },
     });
@@ -280,6 +313,7 @@ Return JSON with shape:
     }
 
     try {
+      runtimeConfig = await this.aiSettingsService.getRuntimeConfig();
       const promptPreview = await this.promptService.preview({
         personaId: idea.personaId,
         templateKey: PromptTemplateKey.SCRIPT,
@@ -294,14 +328,41 @@ Return JSON with shape:
       const response = await this.llmProvider.generateJson<ScriptResponse>({
         prompt: `${promptPreview.prompt}
 
-Return JSON with shape:
+STRICT OUTPUT CONTRACT:
+- Return a single JSON object only.
+- Do not use markdown code fences.
+- Do not include explanations or extra keys.
+- Required shape:
 {
   "text":"script text",
   "shotList":["shot 1", "shot 2"]
 }
+Do not return formats like reel_title/structure/reel_concept.
 `,
-        maxTokens: this.llmMaxTokens,
+        maxTokens: runtimeConfig.maxTokens,
         temperature: 0.7,
+        config: runtimeConfig,
+        responseSchema: {
+          name: 'script_output',
+          strict: true,
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['text', 'shotList'],
+            properties: {
+              text: {
+                type: 'string',
+                minLength: 1,
+              },
+              shotList: {
+                type: 'array',
+                items: {
+                  type: 'string',
+                },
+              },
+            },
+          },
+        },
       });
 
       const scriptText = this.normalizeScriptText(response.data);
@@ -322,10 +383,11 @@ Return JSON with shape:
         latencyMs: Date.now() - startedAt,
         tokens: response.tokens,
         requestId: response.requestId,
+        provider: response.provider,
         model: response.model,
       });
     } catch (error) {
-      if (this.shouldUseMockFallback(error)) {
+      if (this.shouldUseMockFallback(error, runtimeConfig)) {
         const mockScript = buildMockScript();
         await this.scriptsRepository.update(script.id, {
           text: mockScript.text,
@@ -349,16 +411,22 @@ Return JSON with shape:
 
       await this.failScript(script.id, this.toErrorMessage(error));
       if (this.shouldLogFailureForAttempt(job, error)) {
+        const failedConfig =
+          runtimeConfig ?? (await this.aiSettingsService.getRuntimeConfig());
+        const details = this.extractErrorDetails(error);
         await this.createLog({
           operation: AiOperation.SCRIPT,
+          provider: failedConfig.provider,
           projectId: idea.projectId,
           ideaId: idea.id,
           status: GenerationStatus.FAILED,
           latencyMs: Date.now() - startedAt,
           tokens: null,
           requestId: null,
-          model: this.getConfiguredLlmModel(),
-          error: this.toErrorMessage(error),
+          model: failedConfig.model || 'unknown-model',
+          error: details.message,
+          errorCode: details.code,
+          rawResponse: details.rawResponse,
         });
       }
       throw this.toQueueError(error);
@@ -367,6 +435,7 @@ Return JSON with shape:
 
   private async handleGenerateCaption(job: Job<GenerateCaptionJobData>) {
     const startedAt = Date.now();
+    let runtimeConfig: AiRuntimeConfig | null = null;
     const caption = await this.captionsRepository.findOne({
       where: { id: job.data.captionId },
     });
@@ -388,6 +457,7 @@ Return JSON with shape:
     }
 
     try {
+      runtimeConfig = await this.aiSettingsService.getRuntimeConfig();
       const promptPreview = await this.promptService.preview({
         personaId: idea.personaId,
         templateKey: PromptTemplateKey.CAPTION,
@@ -402,14 +472,40 @@ Return JSON with shape:
       const response = await this.llmProvider.generateJson<CaptionResponse>({
         prompt: `${promptPreview.prompt}
 
-Return JSON with shape:
+STRICT OUTPUT CONTRACT:
+- Return a single JSON object only.
+- Do not use markdown code fences.
+- Do not include explanations or extra keys.
+- Required shape:
 {
   "text":"caption text",
   "hashtags":["#tag1","#tag2"]
 }
 `,
-        maxTokens: this.llmMaxTokens,
+        maxTokens: runtimeConfig.maxTokens,
         temperature: 0.8,
+        config: runtimeConfig,
+        responseSchema: {
+          name: 'caption_output',
+          strict: true,
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['text', 'hashtags'],
+            properties: {
+              text: {
+                type: 'string',
+                minLength: 1,
+              },
+              hashtags: {
+                type: 'array',
+                items: {
+                  type: 'string',
+                },
+              },
+            },
+          },
+        },
       });
 
       const text = this.normalizeCaptionText(response.data);
@@ -430,10 +526,11 @@ Return JSON with shape:
         latencyMs: Date.now() - startedAt,
         tokens: response.tokens,
         requestId: response.requestId,
+        provider: response.provider,
         model: response.model,
       });
     } catch (error) {
-      if (this.shouldUseMockFallback(error)) {
+      if (this.shouldUseMockFallback(error, runtimeConfig)) {
         const mockCaption = buildMockCaption();
         await this.captionsRepository.update(caption.id, {
           text: mockCaption.text,
@@ -457,16 +554,22 @@ Return JSON with shape:
 
       await this.failCaption(caption.id, this.toErrorMessage(error));
       if (this.shouldLogFailureForAttempt(job, error)) {
+        const failedConfig =
+          runtimeConfig ?? (await this.aiSettingsService.getRuntimeConfig());
+        const details = this.extractErrorDetails(error);
         await this.createLog({
           operation: AiOperation.CAPTION,
+          provider: failedConfig.provider,
           projectId: idea.projectId,
           ideaId: idea.id,
           status: GenerationStatus.FAILED,
           latencyMs: Date.now() - startedAt,
           tokens: null,
           requestId: null,
-          model: this.getConfiguredLlmModel(),
-          error: this.toErrorMessage(error),
+          model: failedConfig.model || 'unknown-model',
+          error: details.message,
+          errorCode: details.code,
+          rawResponse: details.rawResponse,
         });
       }
       throw this.toQueueError(error);
@@ -534,6 +637,7 @@ Return JSON with shape:
     } catch (error) {
       await this.failAsset(asset.id, this.toErrorMessage(error));
       if (this.shouldLogFailureForAttempt(job, error)) {
+        const details = this.extractErrorDetails(error);
         await this.createLog({
           operation: AiOperation.IMAGE,
           provider: this.imageProvider.name,
@@ -544,7 +648,9 @@ Return JSON with shape:
           tokens: null,
           requestId: null,
           model: 'mock-image-v1',
-          error: this.toErrorMessage(error),
+          error: details.message,
+          errorCode: details.code,
+          rawResponse: details.rawResponse,
         });
       }
       throw this.toQueueError(error);
@@ -608,6 +714,7 @@ Return JSON with shape:
     } catch (error) {
       await this.failAsset(asset.id, this.toErrorMessage(error));
       if (this.shouldLogFailureForAttempt(job, error)) {
+        const details = this.extractErrorDetails(error);
         await this.createLog({
           operation: AiOperation.VIDEO,
           provider: this.videoProvider.name,
@@ -618,23 +725,38 @@ Return JSON with shape:
           tokens: null,
           requestId: null,
           model: 'mock-video-v1',
-          error: this.toErrorMessage(error),
+          error: details.message,
+          errorCode: details.code,
+          rawResponse: details.rawResponse,
         });
       }
       throw this.toQueueError(error);
     }
   }
 
-  private normalizeIdeas(data: IdeasResponse, defaultFormat: string) {
-    const rawIdeas = Array.isArray(data.ideas) ? data.ideas : [];
+  private normalizeIdeas(data: unknown, defaultFormat: string) {
+    const rawIdeas = this.extractIdeasArray(data);
     return rawIdeas
       .map((item) => {
-        const topic =
-          typeof item.topic === 'string' ? item.topic.trim() : undefined;
-        const hook = typeof item.hook === 'string' ? item.hook.trim() : undefined;
+        const topicSource =
+          typeof item.topic === 'string'
+            ? item.topic
+            : typeof item.title === 'string'
+              ? item.title
+              : undefined;
+        const hookSource =
+          typeof item.hook === 'string'
+            ? item.hook
+            : typeof item.description === 'string'
+              ? item.description
+              : undefined;
+        const topic = topicSource?.trim();
+        const hook = hookSource?.trim();
         const rawFormat =
           typeof item.format === 'string'
             ? item.format.trim().toLowerCase()
+            : typeof item.type === 'string'
+              ? item.type.trim().toLowerCase()
             : defaultFormat;
         const format = this.isValidIdeaFormat(rawFormat)
           ? rawFormat
@@ -655,19 +777,121 @@ Return JSON with shape:
       );
   }
 
-  private normalizeScriptText(data: ScriptResponse): string {
-    const value = typeof data.text === 'string' ? data.text : data.script;
-    if (typeof value !== 'string' || !value.trim()) {
-      throw new Error('LLM returned empty script text');
+  private extractIdeasArray(
+    data: unknown,
+  ): Array<{
+    topic?: unknown;
+    title?: unknown;
+    hook?: unknown;
+    description?: unknown;
+    format?: unknown;
+    type?: unknown;
+  }> {
+    if (Array.isArray(data)) {
+      return data;
     }
-    return value.trim().slice(0, this.maxScriptChars);
+    if (!this.isRecord(data)) {
+      return [];
+    }
+    if (Array.isArray(data.ideas)) {
+      return data.ideas;
+    }
+    if (Array.isArray(data.results)) {
+      return data.results;
+    }
+    if (Array.isArray(data.items)) {
+      return data.items;
+    }
+    if (Array.isArray(data.data)) {
+      return data.data;
+    }
+    return [];
+  }
+
+  private normalizeScriptText(data: ScriptResponse): string {
+    const directText = this.pickFirstNonEmptyString([
+      data.text,
+      data.content,
+      data.output,
+      data.result,
+      data.message,
+    ]);
+
+    const scriptField = data.script;
+    const nestedScriptText = this.isRecord(scriptField)
+      ? this.pickFirstNonEmptyString([
+          scriptField.text,
+          scriptField.content,
+          scriptField.output,
+          scriptField.result,
+          scriptField.message,
+        ])
+      : null;
+
+    const reelLike = this.extractReelLikeObject(data);
+    const reelText = reelLike
+      ? this.pickFirstNonEmptyString([
+          reelLike.text,
+          reelLike.script,
+          reelLike.content,
+          reelLike.output,
+          reelLike.result,
+          reelLike.message,
+          reelLike.concept,
+          reelLike.description,
+          reelLike.hook,
+        ])
+      : null;
+
+    const structuredFallbackText = this.buildScriptTextFromStructuredResponse(data);
+
+    const value =
+      directText ??
+      nestedScriptText ??
+      reelText ??
+      structuredFallbackText ??
+      (typeof scriptField === 'string' ? scriptField.trim() : null);
+
+    if (!value) {
+      throw new Error(
+        `LLM returned empty script text. Response preview: ${this.previewUnknown(data)}`,
+      );
+    }
+    return value.slice(0, this.maxScriptChars);
   }
 
   private normalizeShotList(data: ScriptResponse): string[] {
-    const shotList = Array.isArray(data.shotList) ? data.shotList : [];
-    return shotList
-      .filter((item): item is string => typeof item === 'string')
-      .map((item) => item.trim())
+    const reelLike = this.extractReelLikeObject(data);
+    const nestedReelShots = reelLike
+      ? this.pickFirstArray([
+          reelLike.shotList,
+          reelLike.shots,
+          reelLike.scenes,
+          reelLike.steps,
+        ])
+      : null;
+
+    const rawList =
+      this.pickFirstArray([
+        data.shotList,
+        data.shots,
+        data.scenes,
+        data.steps,
+        data.structure,
+        nestedReelShots,
+        this.isRecord(data.script) ? data.script.shotList : null,
+        this.isRecord(data.script) ? data.script.shots : null,
+        this.isRecord(data.script) ? data.script.scenes : null,
+      ]) ??
+      this.toLineArray(
+        this.pickFirstNonEmptyString([
+          this.isRecord(data.script) ? data.script.shotList : null,
+          data.shotList,
+        ]),
+      );
+
+    return rawList
+      .map((item) => this.normalizeShotItem(item))
       .filter(Boolean)
       .slice(0, DEFAULT_MAX_SHOTS);
   }
@@ -720,6 +944,8 @@ Return JSON with shape:
     tokens: number | null;
     requestId: string | null;
     error?: string;
+    errorCode?: string | null;
+    rawResponse?: string | null;
   }) {
     await this.logsRepository.save(
       this.logsRepository.create({
@@ -733,6 +959,8 @@ Return JSON with shape:
         tokens: params.tokens,
         requestId: params.requestId,
         error: params.error ? this.truncateError(params.error) : null,
+        errorCode: params.errorCode ?? null,
+        rawResponse: params.rawResponse ? this.truncateRawResponse(params.rawResponse) : null,
       }),
     );
   }
@@ -745,16 +973,140 @@ Return JSON with shape:
     );
   }
 
-  private shouldUseMockFallback(error: unknown): boolean {
-    return this.aiTestMode && this.isProviderNotConfiguredError(error);
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+  }
+
+  private pickFirstNonEmptyString(values: unknown[]): string | null {
+    for (const value of values) {
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+    return null;
+  }
+
+  private pickFirstArray(values: unknown[]): unknown[] | null {
+    for (const value of values) {
+      if (Array.isArray(value)) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  private normalizeShotItem(value: unknown): string {
+    if (typeof value === 'string') {
+      return value.trim();
+    }
+    if (!this.isRecord(value)) {
+      return '';
+    }
+    return (
+      this.pickFirstNonEmptyString([
+        value.description,
+        value.text,
+        value.title,
+        value.visuals,
+        value.text_overlay,
+        value.audio,
+        value.shot,
+        value.scene,
+        value.action,
+      ]) ?? ''
+    );
+  }
+
+  private buildScriptTextFromStructuredResponse(
+    data: ScriptResponse,
+  ): string | null {
+    const title = this.pickFirstNonEmptyString([data.reel_title]);
+    const duration = this.pickFirstNonEmptyString([data.duration]);
+    const theme = this.pickFirstNonEmptyString([data.theme]);
+    const structureItems = Array.isArray(data.structure) ? data.structure : [];
+
+    const lines: string[] = [];
+    if (title) {
+      lines.push(`Title: ${title}`);
+    }
+    if (duration) {
+      lines.push(`Duration: ${duration}`);
+    }
+    if (theme) {
+      lines.push(`Theme: ${theme}`);
+    }
+
+    const structureLines = structureItems
+      .map((item, index) => {
+        if (!this.isRecord(item)) {
+          if (typeof item === 'string' && item.trim()) {
+            return `${index + 1}. ${item.trim()}`;
+          }
+          return '';
+        }
+
+        const time = this.pickFirstNonEmptyString([item.time]);
+        const visuals = this.pickFirstNonEmptyString([
+          item.visuals,
+          item.description,
+          item.text,
+        ]);
+        const audio = this.pickFirstNonEmptyString([item.audio]);
+        const overlay = this.pickFirstNonEmptyString([
+          item.text_overlay,
+          item.overlay,
+        ]);
+
+        const parts = [time ? `[${time}]` : null, visuals, audio ? `Audio: ${audio}` : null, overlay ? `Text: ${overlay}` : null]
+          .filter((part): part is string => Boolean(part));
+
+        return parts.length ? `${index + 1}. ${parts.join(' | ')}` : '';
+      })
+      .filter(Boolean);
+
+    if (structureLines.length) {
+      lines.push('Structure:', ...structureLines);
+    }
+
+    if (!lines.length) {
+      return null;
+    }
+
+    return lines.join('\n');
+  }
+
+  private extractReelLikeObject(data: ScriptResponse): Record<string, unknown> | null {
+    if (this.isRecord(data.reel)) {
+      return data.reel;
+    }
+    if (this.isRecord(data.storyboard)) {
+      return data.storyboard;
+    }
+    return null;
+  }
+
+  private toLineArray(value: string | null): string[] {
+    if (!value) {
+      return [];
+    }
+    return value
+      .split('\n')
+      .map((item) => item.replace(/^\s*[-*]\s*/, '').trim())
+      .filter(Boolean);
+  }
+
+  private shouldUseMockFallback(
+    error: unknown,
+    runtimeConfig: AiRuntimeConfig | null,
+  ): boolean {
+    const aiTestMode = runtimeConfig?.aiTestMode ?? this.aiTestMode;
+    return aiTestMode && this.isProviderNotConfiguredError(error);
   }
 
   private shouldLogFailureForAttempt(job: Job, error: unknown): boolean {
-    if (this.isUnrecoverableError(error)) {
-      return true;
-    }
-    const attempts = Number(job.opts.attempts ?? 1);
-    return job.attemptsMade + 1 >= attempts;
+    void job;
+    void error;
+    return true;
   }
 
   private toQueueError(error: unknown): Error {
@@ -789,7 +1141,19 @@ Return JSON with shape:
   }
 
   private truncateError(error: string): string {
-    return error.slice(0, 500);
+    return error;
+  }
+
+  private truncateRawResponse(rawResponse: string): string {
+    return rawResponse.slice(0, 60000);
+  }
+
+  private previewUnknown(value: unknown): string {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
   }
 
   private toNumber(value: string | undefined, fallback: number): number {
@@ -811,12 +1175,23 @@ Return JSON with shape:
     return fallback;
   }
 
-  private getConfiguredLlmModel(): string {
-    return (
-      process.env.LLM_MODEL ??
-      process.env.OPENROUTER_MODEL ??
-      process.env.OPENAI_MODEL ??
-      'unknown-model'
-    );
+  private extractErrorDetails(error: unknown): {
+    message: string;
+    code: string | null;
+    rawResponse: string | null;
+  } {
+    if (error instanceof LlmResponseError) {
+      return {
+        message: error.message,
+        code: error.code,
+        rawResponse: error.rawResponse,
+      };
+    }
+    return {
+      message: this.toErrorMessage(error),
+      code: null,
+      rawResponse: null,
+    };
   }
+
 }

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import {
   PolicyRuleSeverity,
   PolicyRuleType,
@@ -11,13 +12,15 @@ import { PromptPreviewDto } from './dto/prompt-preview.dto';
 @Injectable()
 export class PromptService {
   constructor(
+    private readonly aiSettingsService: AiSettingsService,
     private readonly personasService: PersonasService,
     private readonly policyRulesService: PolicyRulesService,
     private readonly promptTemplatesService: PromptTemplatesService,
   ) {}
 
   async preview(dto: PromptPreviewDto): Promise<{ prompt: string }> {
-    const [persona, rules, template] = await Promise.all([
+    const [runtimeConfig, persona, rules, template] = await Promise.all([
+      this.aiSettingsService.getRuntimeConfig(),
       this.personasService.findOne(dto.personaId),
       this.policyRulesService.findAll(),
       this.promptTemplatesService.findByKey(dto.templateKey),
@@ -37,6 +40,7 @@ export class PromptService {
       `Bio: ${persona.bio ?? 'n/a'}`,
       `Visual code: ${persona.visualCode ?? 'n/a'}`,
       `Voice code: ${persona.voiceCode ?? 'n/a'}`,
+      `Response language: ${runtimeConfig.responseLanguage}`,
       '',
       'POLICY',
       this.formatRules(rules, PolicyRuleType.DO, PolicyRuleSeverity.HARD),

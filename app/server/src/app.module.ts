@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AiSettingsModule } from './ai-settings/ai-settings.module';
 import { AuthModule } from './auth/auth.module';
 import { ApiTokenGuard } from './auth/guards/api-token.guard';
 import { buildTypeOrmOptions } from './database/typeorm.config';
@@ -23,6 +24,7 @@ import { ProjectsModule } from './projects/projects.module';
       inject: [],
       useFactory: () => buildTypeOrmOptions(),
     }),
+    AiSettingsModule,
     HealthModule,
     AuthModule,
     ProjectsModule,

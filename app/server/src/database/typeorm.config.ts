@@ -16,6 +16,10 @@ import { PostDraft } from '../post-drafts/entities/post-draft.entity';
 import { Step4AssetsImageVideo1730013000000 } from './migrations/1730013000000-step4-assets-image-video';
 import { Step5ApprovalAndExport1730014000000 } from './migrations/1730014000000-step5-approval-and-export';
 import { Step6VideoPrompt1730015000000 } from './migrations/1730015000000-step6-video-prompt';
+import { AiProviderSettings } from '../ai-settings/entities/ai-provider-settings.entity';
+import { Step7AiProviderSettings1730016000000 } from './migrations/1730016000000-step7-ai-provider-settings';
+import { Step8AiRunLogErrorDetails1730017000000 } from './migrations/1730017000000-step8-ai-run-log-error-details';
+import { Step9AiResponseLanguage1730018000000 } from './migrations/1730018000000-step9-ai-response-language';
 
 const toNumber = (value: string | undefined, fallback: number): number => {
   const parsed = Number(value);
@@ -41,6 +45,7 @@ export const buildTypeOrmOptions = (): DataSourceOptions => ({
     Asset,
     PostDraft,
     ModerationCheck,
+    AiProviderSettings,
   ],
   migrations: [
     InitSchema1730010000000,
@@ -49,6 +54,9 @@ export const buildTypeOrmOptions = (): DataSourceOptions => ({
     Step4AssetsImageVideo1730013000000,
     Step5ApprovalAndExport1730014000000,
     Step6VideoPrompt1730015000000,
+    Step7AiProviderSettings1730016000000,
+    Step8AiRunLogErrorDetails1730017000000,
+    Step9AiResponseLanguage1730018000000,
   ],
   synchronize: false,
   migrationsRun: true,

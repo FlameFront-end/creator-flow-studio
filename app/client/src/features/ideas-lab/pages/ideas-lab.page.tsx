@@ -82,6 +82,13 @@ export function IdeasLabPage() {
     navigate(buildWorkspaceRoute('ideas'), { replace: true })
   }, [buildWorkspaceRoute, ideasCount, isPendingIdeasNavigation, navigate, workspace])
 
+  useEffect(() => {
+    if (!isPendingIdeasNavigation || controller.isWaitingForIdeas) {
+      return
+    }
+    navigate(buildWorkspaceRoute(workspace), { replace: true })
+  }, [buildWorkspaceRoute, controller.isWaitingForIdeas, isPendingIdeasNavigation, navigate, workspace])
+
   const workspaceHint = useMemo(() => {
     if (workspace === 'brief') {
       return 'Сформулируйте задачу: проект, персонаж, тема и количество идей.'
@@ -181,7 +188,7 @@ export function IdeasLabPage() {
             <Grid.Col span={{ base: 12, xl: 5 }}>
               <IdeasListPanel
                 controller={controller}
-                showPendingState={isPendingIdeasNavigation && ideasCount === 0}
+                showPendingState={isPendingIdeasNavigation && controller.isWaitingForIdeas && ideasCount === 0}
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, xl: 7 }}>

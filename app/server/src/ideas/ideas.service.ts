@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { Persona } from '../personas/entities/persona.entity';
 import { Project } from '../projects/entities/project.entity';
 import { AiQueueService } from './ai-queue.service';
@@ -28,6 +29,7 @@ import {
 } from './ideas.constants';
 import { LLM_PROVIDER_TOKEN } from './llm/llm-provider.interface';
 import type { LlmProvider } from './llm/llm-provider.interface';
+import { LlmResponseError } from './llm/llm-response.error';
 import { PromptService } from '../prompt/prompt.service';
 import { PromptTemplateKey } from '../prompt-templates/entities/prompt-template.entity';
 import { buildMockImagePrompt } from './mock/ai-test-fallback';
@@ -37,9 +39,9 @@ import { LocalObjectStorageService } from '../storage/local-object-storage.servi
 export class IdeasService {
   private static readonly MOCK_PROVIDER_NAME = 'mock-test-fallback';
   private static readonly MOCK_MODEL_NAME = 'mock-ai';
-  private readonly aiTestMode = this.toBoolean(process.env.AI_TEST_MODE, false);
 
   constructor(
+    private readonly aiSettingsService: AiSettingsService,
     private readonly aiQueueService: AiQueueService,
     private readonly promptService: PromptService,
     private readonly objectStorageService: LocalObjectStorageService,
@@ -160,6 +162,7 @@ export class IdeasService {
     }
 
     const startedAt = Date.now();
+    const runtimeConfig = await this.aiSettingsService.getRuntimeConfig();
     try {
       const promptPreview = await this.promptService.preview({
         personaId: idea.personaId,
@@ -172,22 +175,44 @@ export class IdeasService {
           format: idea.format,
         },
       });
-      const response = await this.llmProvider.generateJson<{ prompt?: unknown }>({
+      const response = await this.llmProvider.generateJson<{
+        prompt?: unknown;
+      }>({
         prompt: `${promptPreview.prompt}
 
-Return JSON with shape:
+STRICT OUTPUT CONTRACT:
+- Return a single JSON object only.
+- Do not use markdown code fences.
+- Do not include explanations or extra keys.
+- Required shape:
 {
   "prompt":"detailed image prompt"
 }`,
-        maxTokens: 900,
+        maxTokens: runtimeConfig.maxTokens,
         temperature: 0.7,
+        config: runtimeConfig,
+        responseSchema: {
+          name: 'image_prompt_output',
+          strict: true,
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['prompt'],
+            properties: {
+              prompt: {
+                type: 'string',
+                minLength: 1,
+              },
+            },
+          },
+        },
       });
 
       const prompt = this.normalizeImagePrompt(response.data);
       await this.ideasRepository.update(idea.id, { imagePrompt: prompt });
       await this.logsRepository.save(
         this.logsRepository.create({
-          provider: this.llmProvider.name,
+          provider: response.provider,
           model: response.model,
           operation: AiOperation.IMAGE_PROMPT,
           projectId: idea.projectId,
@@ -202,7 +227,7 @@ Return JSON with shape:
 
       return { prompt };
     } catch (error) {
-      if (this.shouldUseMockFallback(error)) {
+      if (this.shouldUseMockFallback(error, runtimeConfig.aiTestMode)) {
         const prompt = buildMockImagePrompt();
         await this.ideasRepository.update(idea.id, { imagePrompt: prompt });
         await this.logsRepository.save(
@@ -223,14 +248,11 @@ Return JSON with shape:
         return { prompt };
       }
 
+      const details = this.extractErrorDetails(error);
       await this.logsRepository.save(
         this.logsRepository.create({
-          provider: this.llmProvider.name,
-          model:
-            process.env.LLM_MODEL ??
-            process.env.OPENROUTER_MODEL ??
-            process.env.OPENAI_MODEL ??
-            'unknown-model',
+          provider: runtimeConfig.provider,
+          model: runtimeConfig.model || 'unknown-model',
           operation: AiOperation.IMAGE_PROMPT,
           projectId: idea.projectId,
           ideaId: idea.id,
@@ -238,7 +260,9 @@ Return JSON with shape:
           latencyMs: Date.now() - startedAt,
           tokens: null,
           requestId: null,
-          error: this.toErrorMessage(error),
+          error: details.message,
+          errorCode: details.code,
+          rawResponse: details.rawResponse,
         }),
       );
       throw error;
@@ -252,6 +276,7 @@ Return JSON with shape:
     }
 
     const startedAt = Date.now();
+    const runtimeConfig = await this.aiSettingsService.getRuntimeConfig();
     try {
       const promptPreview = await this.promptService.preview({
         personaId: idea.personaId,
@@ -264,22 +289,44 @@ Return JSON with shape:
           format: idea.format,
         },
       });
-      const response = await this.llmProvider.generateJson<{ prompt?: unknown }>({
+      const response = await this.llmProvider.generateJson<{
+        prompt?: unknown;
+      }>({
         prompt: `${promptPreview.prompt}
 
-Return JSON with shape:
+STRICT OUTPUT CONTRACT:
+- Return a single JSON object only.
+- Do not use markdown code fences.
+- Do not include explanations or extra keys.
+- Required shape:
 {
   "prompt":"detailed video prompt"
 }`,
-        maxTokens: 900,
+        maxTokens: runtimeConfig.maxTokens,
         temperature: 0.7,
+        config: runtimeConfig,
+        responseSchema: {
+          name: 'video_prompt_output',
+          strict: true,
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['prompt'],
+            properties: {
+              prompt: {
+                type: 'string',
+                minLength: 1,
+              },
+            },
+          },
+        },
       });
 
       const prompt = this.normalizeImagePrompt(response.data);
       await this.ideasRepository.update(idea.id, { videoPrompt: prompt });
       await this.logsRepository.save(
         this.logsRepository.create({
-          provider: this.llmProvider.name,
+          provider: response.provider,
           model: response.model,
           operation: AiOperation.VIDEO_PROMPT,
           projectId: idea.projectId,
@@ -294,7 +341,7 @@ Return JSON with shape:
 
       return { prompt };
     } catch (error) {
-      if (this.shouldUseMockFallback(error)) {
+      if (this.shouldUseMockFallback(error, runtimeConfig.aiTestMode)) {
         const prompt = buildMockImagePrompt();
         await this.ideasRepository.update(idea.id, { videoPrompt: prompt });
         await this.logsRepository.save(
@@ -315,14 +362,11 @@ Return JSON with shape:
         return { prompt };
       }
 
+      const details = this.extractErrorDetails(error);
       await this.logsRepository.save(
         this.logsRepository.create({
-          provider: this.llmProvider.name,
-          model:
-            process.env.LLM_MODEL ??
-            process.env.OPENROUTER_MODEL ??
-            process.env.OPENAI_MODEL ??
-            'unknown-model',
+          provider: runtimeConfig.provider,
+          model: runtimeConfig.model || 'unknown-model',
           operation: AiOperation.VIDEO_PROMPT,
           projectId: idea.projectId,
           ideaId: idea.id,
@@ -330,7 +374,9 @@ Return JSON with shape:
           latencyMs: Date.now() - startedAt,
           tokens: null,
           requestId: null,
-          error: this.toErrorMessage(error),
+          error: details.message,
+          errorCode: details.code,
+          rawResponse: details.rawResponse,
         }),
       );
       throw error;
@@ -467,6 +513,24 @@ Return JSON with shape:
         latestCaptionsByIdea.set(caption.ideaId, caption);
       }
     }
+    const scriptSucceededCountByIdea = new Map<string, number>();
+    for (const script of scripts) {
+      if (script.status === GenerationStatus.SUCCEEDED) {
+        scriptSucceededCountByIdea.set(
+          script.ideaId,
+          (scriptSucceededCountByIdea.get(script.ideaId) ?? 0) + 1,
+        );
+      }
+    }
+    const captionSucceededCountByIdea = new Map<string, number>();
+    for (const caption of captions) {
+      if (caption.status === GenerationStatus.SUCCEEDED) {
+        captionSucceededCountByIdea.set(
+          caption.ideaId,
+          (captionSucceededCountByIdea.get(caption.ideaId) ?? 0) + 1,
+        );
+      }
+    }
 
     const currentImagesByIdea = new Map<string, Asset>();
     const currentVideosByIdea = new Map<string, Asset>();
@@ -524,6 +588,8 @@ Return JSON with shape:
       latestVideo: currentVideosByIdea.get(idea.id) ?? null,
       latestImageStatus: latestImageStatusByIdea.get(idea.id) ?? null,
       latestVideoStatus: latestVideoStatusByIdea.get(idea.id) ?? null,
+      scriptSucceededCount: scriptSucceededCountByIdea.get(idea.id) ?? 0,
+      captionSucceededCount: captionSucceededCountByIdea.get(idea.id) ?? 0,
       imageAssetsCount: imageAssetsCountByIdea.get(idea.id) ?? 0,
       videoAssetsCount: videoAssetsCountByIdea.get(idea.id) ?? 0,
       imageSucceededCount: imageSucceededCountByIdea.get(idea.id) ?? 0,
@@ -582,7 +648,9 @@ Return JSON with shape:
       return { deleted: 0 };
     }
 
-    const result = await this.ideasRepository.delete({ projectId: query.projectId });
+    const result = await this.ideasRepository.delete({
+      projectId: query.projectId,
+    });
     return { deleted: result.affected ?? 0 };
   }
 
@@ -591,7 +659,9 @@ Return JSON with shape:
       return { deleted: 0 };
     }
 
-    const result = await this.logsRepository.delete({ projectId: query.projectId });
+    const result = await this.logsRepository.delete({
+      projectId: query.projectId,
+    });
     return { deleted: result.affected ?? 0 };
   }
 
@@ -612,7 +682,9 @@ Return JSON with shape:
   }
 
   async removeAsset(assetId: string) {
-    const asset = await this.assetsRepository.findOne({ where: { id: assetId } });
+    const asset = await this.assetsRepository.findOne({
+      where: { id: assetId },
+    });
     if (!asset) {
       throw new NotFoundException('Asset not found');
     }
@@ -652,13 +724,13 @@ Return JSON with shape:
 
   private toErrorMessage(error: unknown): string {
     if (error instanceof Error && error.message) {
-      return error.message.slice(0, 500);
+      return error.message;
     }
     return 'Unknown prompt generation error';
   }
 
-  private shouldUseMockFallback(error: unknown): boolean {
-    if (!this.aiTestMode) {
+  private shouldUseMockFallback(error: unknown, aiTestMode: boolean): boolean {
+    if (!aiTestMode) {
       return false;
     }
     return this.toErrorMessage(error)
@@ -666,17 +738,22 @@ Return JSON with shape:
       .includes('is not configured for ai generation');
   }
 
-  private toBoolean(value: string | undefined, fallback: boolean): boolean {
-    if (value == null) {
-      return fallback;
+  private extractErrorDetails(error: unknown): {
+    message: string;
+    code: string | null;
+    rawResponse: string | null;
+  } {
+    if (error instanceof LlmResponseError) {
+      return {
+        message: error.message,
+        code: error.code,
+        rawResponse: error.rawResponse,
+      };
     }
-    const normalized = value.trim().toLowerCase();
-    if (['1', 'true', 'yes', 'on'].includes(normalized)) {
-      return true;
-    }
-    if (['0', 'false', 'no', 'off'].includes(normalized)) {
-      return false;
-    }
-    return fallback;
+    return {
+      message: this.toErrorMessage(error),
+      code: null,
+      rawResponse: null,
+    };
   }
 }

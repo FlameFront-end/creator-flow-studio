@@ -46,6 +46,12 @@ export class AiRunLog {
   @Column({ type: 'text', nullable: true })
   error!: string | null;
 
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  errorCode!: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  rawResponse!: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 }

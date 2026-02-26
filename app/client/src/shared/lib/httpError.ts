@@ -35,6 +35,25 @@ const EXACT_ERROR_TRANSLATIONS: Record<string, string> = {
     'Промпт изображения пуст. Сначала сгенерируйте промпт изображения',
   'Video prompt is empty. Generate video prompt first.':
     'Промпт видео пуст. Сначала сгенерируйте промпт видео',
+  'Unsupported provider. Use openai, openrouter, or openai-compatible.':
+    'Неподдерживаемый провайдер. Используйте openai, openrouter или openai-compatible',
+  'Model is required': 'Укажите модель',
+  'Base URL is required for openai-compatible provider':
+    'Для openai-compatible требуется Base URL',
+  'Base URL must be a valid HTTP(S) URL':
+    'Base URL должен быть валидным HTTP(S) адресом',
+  'Base URL must use HTTP or HTTPS':
+    'Base URL должен начинаться с http:// или https://',
+  'OPENAI API key is required to save this provider':
+    'Для OpenAI необходимо указать API ключ',
+  'OPENROUTER API key is required to save this provider':
+    'Для OpenRouter необходимо указать API ключ',
+  'LLM API key is required to save openai-compatible provider':
+    'Для openai-compatible необходимо указать API ключ',
+  'Too many AI connection test requests. Try again in one minute.':
+    'Слишком много проверок подключения. Повторите через минуту',
+  'AI connection test returned an empty response':
+    'Проверка подключения вернула пустой ответ',
 }
 
 const translateErrorMessage = (message: string): string => {
@@ -46,6 +65,12 @@ const translateErrorMessage = (message: string): string => {
   const exact = EXACT_ERROR_TRANSLATIONS[normalized]
   if (exact) {
     return exact
+  }
+
+  const shouldNotExistMatch = normalized.match(/^property (.+) should not exist$/i)
+  if (shouldNotExistMatch) {
+    const fieldName = shouldNotExistMatch[1]
+    return `Поле "${fieldName}" не должно передаваться в этом запросе`
   }
 
   const quotedNotFoundMatch = normalized.match(/^(Script|Caption|Asset|Prompt template) "(.+)" not found$/i)

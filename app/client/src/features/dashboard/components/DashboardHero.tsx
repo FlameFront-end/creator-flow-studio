@@ -25,7 +25,7 @@ export const DashboardHero = ({ view, onViewChange, onLogout }: DashboardHeroPro
               Панель управления контентом
             </h1>
             <p className="dashboard-hero-subtitle text-sm text-muted-foreground md:text-base">
-              Проекты и генерация контента в едином потоке. Системные настройки ИИ вынесены отдельно.
+              Проекты и генерация контента в едином потоке. Настройка ИИ вынесена отдельно.
             </p>
           </div>
 
@@ -76,7 +76,7 @@ export const DashboardHero = ({ view, onViewChange, onLogout }: DashboardHeroPro
             }}
             items={[
               { label: 'Проекты', value: 'projects' },
-              { label: 'Настройки ИИ', value: 'prompt-studio' },
+              { label: 'Настройка ИИ', value: 'prompt-studio' },
               { label: 'Идеи и сценарии', value: 'ideas-lab' },
             ]}
           />

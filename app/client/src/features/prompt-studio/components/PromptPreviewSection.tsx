@@ -162,144 +162,161 @@ export function PromptPreviewSection() {
   }
 
   return (
-    <Stack gap="md">
-      <form onSubmit={onSubmit} noValidate>
-        <Stack gap="sm">
-          <Select
-            label="Персонаж"
-            value={personaId}
-            onChange={setPersonaId}
-            data={(personasQuery.data ?? []).map((persona) => ({
-              value: persona.id,
-              label: persona.name,
-            }))}
-            placeholder="Выберите персонажа"
-            searchable
-          />
+    <Stack gap="md" className="prompt-preview-redesign">
+      <Paper className="inner-surface prompt-preview-hero" radius="md" p="md">
+        <Stack gap={6}>
+          <Title order={4}>Тест шаблона</Title>
+          <Text size="sm" c="dimmed">
+            Выберите персонажа, настройте переменные и проверьте финальный prompt до генерации в Ideas Lab.
+          </Text>
+        </Stack>
+      </Paper>
 
-          <Select
-            label="Тип шаблона"
-            value={templateKey}
-            onChange={(value) => setTemplateKey((value as PromptTemplateKey) ?? 'ideas')}
-            data={TEMPLATE_KEYS.map((item) => ({ value: item, label: TEMPLATE_KEY_LABEL[item] }))}
-            allowDeselect={false}
-          />
-
-          {!hasTemplate ? (
-            <Alert color="yellow" title="Внимание" variant="light">
-              Нет активного текста для выбранного шаблона. Сначала сохраните шаблон во вкладке "Шаблоны".
-            </Alert>
-          ) : null}
-
-          <Paper className="inner-surface" radius="md" p="sm">
+      <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="md" className="prompt-preview-layout">
+        <Paper className="inner-surface prompt-preview-config" radius="md" p="md">
+          <form onSubmit={onSubmit} noValidate>
             <Stack gap="sm">
-              <Title order={5}>Быстрое добавление переменных</Title>
-              <SimpleGrid cols={{ base: 1, sm: 3 }} className="prompt-preview-quick-grid">
-                <TextInput
-                  label="Ключ"
-                  placeholder="topic"
-                  value={varKey}
-                  onChange={(event) => setVarKey(event.currentTarget.value)}
-                />
+              <Title order={5}>Конфигурация</Title>
+
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
                 <Select
-                  label="Тип"
-                  value={varType}
-                  onChange={(value) => setVarType((value as PreviewVariableType) ?? 'string')}
-                  data={[
-                    { value: 'string', label: 'Строка' },
-                    { value: 'number', label: 'Число' },
-                    { value: 'boolean', label: 'Да/нет' },
-                  ]}
-                  allowDeselect={false}
+                  label="Персонаж"
+                  value={personaId}
+                  onChange={setPersonaId}
+                  data={(personasQuery.data ?? []).map((persona) => ({
+                    value: persona.id,
+                    label: persona.name,
+                  }))}
+                  placeholder="Выберите персонажа"
+                  searchable
                 />
-                <TextInput
-                  label="Значение"
-                  placeholder={varType === 'boolean' ? 'true / false' : 'значение'}
-                  value={varValue}
-                  onChange={(event) => setVarValue(event.currentTarget.value)}
+
+                <Select
+                  label="Тип шаблона"
+                  value={templateKey}
+                  onChange={(value) => setTemplateKey((value as PromptTemplateKey) ?? 'ideas')}
+                  data={TEMPLATE_KEYS.map((item) => ({ value: item, label: TEMPLATE_KEY_LABEL[item] }))}
+                  allowDeselect={false}
                 />
               </SimpleGrid>
 
-              <Group justify="flex-end" className="prompt-preview-quick-actions">
-                <AppButton leftSection={<IconPlus size={16} />} onClick={addVariable} variant="light">
-                  Добавить
+              {!hasTemplate ? (
+                <Alert color="yellow" title="Внимание" variant="light">
+                  Нет активного текста для выбранного шаблона. Сначала сохраните шаблон во вкладке "Шаблоны".
+                </Alert>
+              ) : null}
+
+              <Paper className="inner-surface prompt-preview-variables-card" radius="md" p="sm">
+                <Stack gap="sm">
+                  <Title order={5}>Быстрое добавление переменных</Title>
+                  <SimpleGrid cols={{ base: 1, sm: 3 }} className="prompt-preview-quick-grid">
+                    <TextInput
+                      label="Ключ"
+                      placeholder="topic"
+                      value={varKey}
+                      onChange={(event) => setVarKey(event.currentTarget.value)}
+                    />
+                    <Select
+                      label="Тип"
+                      value={varType}
+                      onChange={(value) => setVarType((value as PreviewVariableType) ?? 'string')}
+                      data={[
+                        { value: 'string', label: 'Строка' },
+                        { value: 'number', label: 'Число' },
+                        { value: 'boolean', label: 'Да/нет' },
+                      ]}
+                      allowDeselect={false}
+                    />
+                    <TextInput
+                      label="Значение"
+                      placeholder={varType === 'boolean' ? 'true / false' : 'значение'}
+                      value={varValue}
+                      onChange={(event) => setVarValue(event.currentTarget.value)}
+                    />
+                  </SimpleGrid>
+
+                  <Group justify="flex-end" className="prompt-preview-quick-actions">
+                    <AppButton leftSection={<IconPlus size={16} />} onClick={addVariable} variant="light">
+                      Добавить
+                    </AppButton>
+                  </Group>
+
+                  {Object.keys(variablesMap).length ? (
+                    <AppTable>
+                      <AppTable.Thead>
+                        <AppTable.Tr>
+                          <AppTable.Th>Ключ</AppTable.Th>
+                          <AppTable.Th>Значение</AppTable.Th>
+                          <AppTable.Th>Тип</AppTable.Th>
+                          <AppTable.Th>Действия</AppTable.Th>
+                        </AppTable.Tr>
+                      </AppTable.Thead>
+                      <AppTable.Tbody>
+                        {Object.entries(variablesMap).map(([key, value]) => (
+                          <AppTable.Tr key={key}>
+                            <AppTable.Td>{key}</AppTable.Td>
+                            <AppTable.Td>{String(value)}</AppTable.Td>
+                            <AppTable.Td>{typeof value === 'boolean' ? 'Да/нет' : typeof value === 'number' ? 'Число' : 'Строка'}</AppTable.Td>
+                            <AppTable.Td>
+                              <ActionIcon color="red" variant="light" onClick={() => removeVariable(key)}>
+                                <IconTrash size={14} />
+                              </ActionIcon>
+                            </AppTable.Td>
+                          </AppTable.Tr>
+                        ))}
+                      </AppTable.Tbody>
+                    </AppTable>
+                  ) : (
+                    <Text c="dimmed">Переменные еще не добавлены</Text>
+                  )}
+                </Stack>
+              </Paper>
+
+              <Textarea
+                label="Переменные (JSON)"
+                value={variablesRaw}
+                onChange={(event) => setVariablesRaw(event.currentTarget.value)}
+                minRows={8}
+                maxRows={12}
+                autosize
+                styles={{ input: { resize: 'vertical' } }}
+              />
+
+              <Group justify="space-between" className="prompt-preview-main-actions">
+                <AppButton variant="default" onClick={importFromJson}>
+                  Импортировать JSON в таблицу
+                </AppButton>
+                <AppButton type="submit" loading={previewMutation.isPending}>
+                  Сгенерировать
                 </AppButton>
               </Group>
 
-              {Object.keys(variablesMap).length ? (
-                <AppTable>
-                  <AppTable.Thead>
-                    <AppTable.Tr>
-                      <AppTable.Th>Ключ</AppTable.Th>
-                      <AppTable.Th>Значение</AppTable.Th>
-                      <AppTable.Th>Тип</AppTable.Th>
-                      <AppTable.Th>Действия</AppTable.Th>
-                    </AppTable.Tr>
-                  </AppTable.Thead>
-                  <AppTable.Tbody>
-                    {Object.entries(variablesMap).map(([key, value]) => (
-                      <AppTable.Tr key={key}>
-                        <AppTable.Td>{key}</AppTable.Td>
-                        <AppTable.Td>{String(value)}</AppTable.Td>
-                        <AppTable.Td>{typeof value === 'boolean' ? 'Да/нет' : typeof value === 'number' ? 'Число' : 'Строка'}</AppTable.Td>
-                        <AppTable.Td>
-                          <ActionIcon color="red" variant="light" onClick={() => removeVariable(key)}>
-                            <IconTrash size={14} />
-                          </ActionIcon>
-                        </AppTable.Td>
-                      </AppTable.Tr>
-                    ))}
-                  </AppTable.Tbody>
-                </AppTable>
-              ) : (
-                <Text c="dimmed">Переменные еще не добавлены</Text>
-              )}
+              {jsonError ? (
+                <AppInlineErrorAlert title="Ошибка ввода">
+                  {jsonError}
+                </AppInlineErrorAlert>
+              ) : null}
+
+              {previewMutation.isError ? (
+                <AppInlineErrorAlert>
+                  {getErrorMessage(previewMutation.error, 'Не удалось сгенерировать предпросмотр')}
+                </AppInlineErrorAlert>
+              ) : null}
             </Stack>
-          </Paper>
+          </form>
+        </Paper>
 
-          <Textarea
-            label="Переменные (JSON)"
-            value={variablesRaw}
-            onChange={(event) => setVariablesRaw(event.currentTarget.value)}
-            minRows={8}
-            maxRows={12}
-            autosize
-            styles={{ input: { resize: 'vertical' } }}
-          />
-
-          <Group justify="space-between">
-            <AppButton variant="default" onClick={importFromJson}>
-              Импортировать JSON в таблицу
-            </AppButton>
-            <AppButton type="submit" loading={previewMutation.isPending}>
-              Сгенерировать
-            </AppButton>
-          </Group>
-
-          {jsonError ? (
-            <AppInlineErrorAlert title="Ошибка ввода">
-              {jsonError}
-            </AppInlineErrorAlert>
-          ) : null}
-
-          {previewMutation.isError ? (
-            <AppInlineErrorAlert>
-              {getErrorMessage(previewMutation.error, 'Не удалось сгенерировать предпросмотр')}
-            </AppInlineErrorAlert>
-          ) : null}
-        </Stack>
-      </form>
-
-      <Paper className="inner-surface" radius="md" p="sm">
-        <Title order={5} mb="sm">
-          Результат
-        </Title>
-        {previewMutation.data?.prompt ? (
-          <Code block>{previewMutation.data.prompt}</Code>
-        ) : (
-          <Text c="dimmed">Здесь появится сгенерированный prompt</Text>
-        )}
-      </Paper>
+        <Paper className="inner-surface prompt-preview-result" radius="md" p="md">
+          <Stack gap="sm">
+            <Title order={5}>Результат</Title>
+            {previewMutation.data?.prompt ? (
+              <Code block>{previewMutation.data.prompt}</Code>
+            ) : (
+              <Text c="dimmed">Здесь появится сгенерированный prompt</Text>
+            )}
+          </Stack>
+        </Paper>
+      </SimpleGrid>
     </Stack>
   )
 }

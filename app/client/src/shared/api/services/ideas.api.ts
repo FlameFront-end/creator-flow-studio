@@ -50,6 +50,8 @@ export type Idea = {
   latestVideo: Asset | null
   latestImageStatus?: GenerationStatus | null
   latestVideoStatus?: GenerationStatus | null
+  scriptSucceededCount?: number
+  captionSucceededCount?: number
   imageAssetsCount?: number
   videoAssetsCount?: number
   imageSucceededCount?: number
@@ -90,6 +92,8 @@ export type AiRunLog = {
   requestId: string | null
   status: GenerationStatus
   error: string | null
+  errorCode?: string | null
+  rawResponse?: string | null
   createdAt: string
 }
 

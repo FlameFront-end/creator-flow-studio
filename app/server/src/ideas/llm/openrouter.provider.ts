@@ -4,6 +4,7 @@ import {
   LlmJsonResponse,
   LlmProvider,
 } from './llm-provider.interface';
+import { LlmResponseError } from './llm-response.error';
 
 type OpenRouterChatCompletionResponse = {
   id?: string;
@@ -24,9 +25,6 @@ type OpenRouterChatCompletionResponse = {
 @Injectable()
 export class OpenRouterProvider implements LlmProvider {
   readonly name = 'openrouter';
-  private readonly apiKey = process.env.OPENROUTER_API_KEY ?? '';
-  private readonly model =
-    process.env.OPENROUTER_MODEL ?? 'google/gemini-2.0-flash-exp:free';
   private readonly endpoint = 'https://openrouter.ai/api/v1/chat/completions';
   private readonly siteUrl = process.env.OPENROUTER_SITE_URL ?? 'http://localhost';
   private readonly appName = process.env.OPENROUTER_APP_NAME ?? 'creator-flow-studio';
@@ -35,8 +33,18 @@ export class OpenRouterProvider implements LlmProvider {
     prompt,
     maxTokens,
     temperature,
+    config,
   }: LlmJsonRequest): Promise<LlmJsonResponse<T>> {
-    if (!this.apiKey) {
+    const apiKey =
+      config?.provider === this.name
+        ? config.apiKey
+        : process.env.OPENROUTER_API_KEY ?? '';
+    const model =
+      config?.provider === this.name
+        ? config.model
+        : process.env.OPENROUTER_MODEL ?? 'google/gemini-2.0-flash-exp:free';
+
+    if (!apiKey) {
       throw new ServiceUnavailableException(
         'OPENROUTER_API_KEY is not configured for AI generation',
       );
@@ -45,15 +53,16 @@ export class OpenRouterProvider implements LlmProvider {
     const response = await fetch(this.endpoint, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': this.siteUrl,
         'X-Title': this.appName,
       },
       body: JSON.stringify({
-        model: this.model,
+        model,
         temperature,
         max_tokens: maxTokens,
+        response_format: { type: 'json_object' },
         messages: [
           {
             role: 'system',
@@ -71,15 +80,19 @@ export class OpenRouterProvider implements LlmProvider {
     const payload =
       (await response.json()) as OpenRouterChatCompletionResponse;
     if (!response.ok) {
-      throw new ServiceUnavailableException(
+      throw new LlmResponseError(
         payload.error?.message ?? 'OpenRouter request failed',
+        'provider_request_failed',
+        { rawResponse: JSON.stringify(payload) },
       );
     }
 
     const content = payload.choices?.[0]?.message?.content?.trim();
     if (!content) {
-      throw new ServiceUnavailableException(
+      throw new LlmResponseError(
         'OpenRouter response is empty or malformed',
+        'empty_response',
+        { rawResponse: JSON.stringify(payload) },
       );
     }
 
@@ -87,13 +100,16 @@ export class OpenRouterProvider implements LlmProvider {
     try {
       parsed = JSON.parse(content) as T;
     } catch {
-      throw new ServiceUnavailableException(
+      throw new LlmResponseError(
         'OpenRouter returned invalid JSON payload',
+        'invalid_json_payload',
+        { rawResponse: content },
       );
     }
 
     return {
-      model: payload.model || this.model,
+      provider: this.name,
+      model: payload.model || model,
       tokens: payload.usage?.total_tokens ?? null,
       requestId: response.headers.get('x-request-id'),
       data: parsed,

@@ -36,13 +36,9 @@ export class AiQueueService implements OnModuleDestroy {
   });
 
   private readonly defaultOptions: JobsOptions = {
-    attempts: 3,
+    attempts: 1,
     removeOnComplete: 200,
     removeOnFail: 500,
-    backoff: {
-      type: 'exponential',
-      delay: 2000,
-    },
   };
 
   enqueueIdeasJob(data: GenerateIdeasJobData) {
