@@ -21,6 +21,8 @@ import { Step7AiProviderSettings1730016000000 } from './migrations/1730016000000
 import { Step8AiRunLogErrorDetails1730017000000 } from './migrations/1730017000000-step8-ai-run-log-error-details';
 import { Step9AiResponseLanguage1730018000000 } from './migrations/1730018000000-step9-ai-response-language';
 import { Step10UniqueProjectPersonaNames1730019000000 } from './migrations/1730019000000-step10-unique-project-persona-names';
+import { User } from '../auth/entities/user.entity';
+import { Step11UsersAuth1730020000000 } from './migrations/1730020000000-step11-users-auth';
 
 const toNumber = (value: string | undefined, fallback: number): number => {
   const parsed = Number(value);
@@ -47,6 +49,7 @@ export const buildTypeOrmOptions = (): DataSourceOptions => ({
     PostDraft,
     ModerationCheck,
     AiProviderSettings,
+    User,
   ],
   migrations: [
     InitSchema1730010000000,
@@ -59,6 +62,7 @@ export const buildTypeOrmOptions = (): DataSourceOptions => ({
     Step8AiRunLogErrorDetails1730017000000,
     Step9AiResponseLanguage1730018000000,
     Step10UniqueProjectPersonaNames1730019000000,
+    Step11UsersAuth1730020000000,
   ],
   synchronize: false,
   migrationsRun: true,

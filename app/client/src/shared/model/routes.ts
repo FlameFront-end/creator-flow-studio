@@ -30,9 +30,9 @@ export const DASHBOARD_CHILD_PATHS = {
 export const buildPostDraftExportRoute = (id: string) =>
   `/post-drafts/${id}/export`
 
-export type AdminView = 'projects' | 'prompt-studio' | 'ideas-lab'
+export type DashboardView = 'projects' | 'prompt-studio' | 'ideas-lab'
 
-export const isAdminView = (value: string | null | undefined): value is AdminView =>
+export const isDashboardView = (value: string | null | undefined): value is DashboardView =>
   value === 'projects' || value === 'prompt-studio' || value === 'ideas-lab'
 
 export type IdeasLabWorkspaceRoute = 'brief' | 'ideas' | 'logs'

@@ -3,11 +3,11 @@ import { IconBook2, IconLogout2, IconMoonStars, IconSun } from '@tabler/icons-re
 import { useNavigate } from 'react-router-dom'
 import { AppButton } from '../../../shared/components/AppButton'
 import { AppTabs } from '../../../shared/components/AppTabs'
-import { ROUTES, type AdminView } from '../../../shared/model/routes'
+import { ROUTES, type DashboardView } from '../../../shared/model/routes'
 
 type DashboardHeroProps = {
-  view: AdminView
-  onViewChange: (nextView: AdminView) => void
+  view: DashboardView
+  onViewChange: (nextView: DashboardView) => void
   onLogout: () => void
 }
 
@@ -54,7 +54,6 @@ export const DashboardHero = ({ view, onViewChange, onLogout }: DashboardHeroPro
             >
               Инструкция
             </AppButton>
-
             <AppButton
               leftSection={<IconLogout2 size={16} />}
               variant="light"
@@ -72,7 +71,7 @@ export const DashboardHero = ({ view, onViewChange, onLogout }: DashboardHeroPro
             value={view}
             onChange={(value) => {
               if (!value) return
-              onViewChange(value as AdminView)
+              onViewChange(value as DashboardView)
             }}
             items={[
               { label: 'Проекты', value: 'projects' },

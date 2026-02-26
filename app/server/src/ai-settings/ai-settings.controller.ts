@@ -39,7 +39,7 @@ export class AiSettingsController {
   }
 
   private resolveUpdatedBy(request: Request): string | null {
-    const headerValue = request.headers['x-admin-user'];
+    const headerValue = request.headers['x-user-id'];
     if (typeof headerValue === 'string' && headerValue.trim()) {
       return headerValue.trim().slice(0, 120);
     }

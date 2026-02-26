@@ -1,23 +1,21 @@
 import { Paper, Stack, Text, Title } from '@ui/core'
-import { AppBadge } from '../../../shared/components/AppBadge'
 import { LoginForm } from '../components/login-form'
 
 const AuthPage = () => {
   return (
-    <div className="auth-page relative flex min-h-screen items-center py-8">
-      <div className="container max-w-[460px]">
-        <Paper className="panel-surface auth-card border-border/80 bg-card/90" p="lg">
-          <Stack gap="md">
-            <AppBadge color="cyan" variant="light" w="fit-content">
-              Вход в систему
-            </AppBadge>
-            <Title order={2} className="auth-title">
+    <div className="auth-page relative min-h-screen py-8 md:py-12">
+      <div className="container max-w-[560px]">
+        <Paper className="panel-surface border-border/80 bg-card/90 p-6 md:p-8" radius={24}>
+          <Stack gap="sm">
+            <Text className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-400/90">
               Creator Flow Studio
+            </Text>
+            <Title order={1} className="auth-title text-3xl md:text-4xl">
+              Вход в аккаунт
             </Title>
             <Text className="auth-subtitle text-sm md:text-base">
-              Авторизуйтесь, чтобы открыть панель управления контентом.
+              Введите email и пароль. Если аккаунта нет, создайте его за минуту.
             </Text>
-
             <LoginForm />
           </Stack>
         </Paper>

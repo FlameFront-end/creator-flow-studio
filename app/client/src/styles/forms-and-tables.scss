@@ -38,6 +38,19 @@ $field-required: '.appui-Input-required, .appui-Textarea-required, .appui-Select
   box-sizing: border-box;
 }
 
+/* Hide native number input spinners in Chrome/Safari/Firefox */
+.appui-NumberInput-input,
+input[type='number'].appui-Input-input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
 .appui-Textarea-input {
   padding: 10px 12px;
   line-height: 1.4;

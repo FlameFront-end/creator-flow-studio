@@ -1,17 +1,18 @@
-import { useQueryClient } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { clearAuthToken } from '../../../shared/lib/auth'
-import { ROUTES, type AdminView } from '../../../shared/model/routes'
+import { useQueryClient } from '@tanstack/react-query'
+import { authApi } from '../../../shared/api/services/auth.api'
+import { clearAuthSession, getRefreshToken } from '../../../shared/lib/auth'
+import { ROUTES, type DashboardView } from '../../../shared/model/routes'
 import { DashboardHero } from './DashboardHero'
 
-const viewRouteMap: Record<AdminView, string> = {
+const viewRouteMap: Record<DashboardView, string> = {
   projects: ROUTES.DASHBOARD_PROJECTS,
   'prompt-studio': ROUTES.DASHBOARD_PROMPT_STUDIO,
   'ideas-lab': ROUTES.DASHBOARD_IDEAS_LAB,
 }
 
 type DashboardShellProps = {
-  view: AdminView
+  view: DashboardView
   navigate: (to: string) => void
   children: ReactNode
 }
@@ -27,7 +28,11 @@ export const DashboardShell = ({ view, navigate, children }: DashboardShellProps
             view={view}
             onViewChange={(nextView) => navigate(viewRouteMap[nextView])}
             onLogout={() => {
-              clearAuthToken()
+              const refreshToken = getRefreshToken()
+              if (refreshToken) {
+                void authApi.logout({ refreshToken }).catch(() => undefined)
+              }
+              clearAuthSession()
               queryClient.clear()
             }}
           />

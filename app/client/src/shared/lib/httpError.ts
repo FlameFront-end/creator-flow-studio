@@ -7,7 +7,9 @@ type ApiErrorShape = {
 
 const EXACT_ERROR_TRANSLATIONS: Record<string, string> = {
   'Invalid credentials': 'Неверные учетные данные',
-  'Invalid or missing bearer token': 'Отсутствует или некорректный токен доступа',
+  'User already exists': 'Пользователь с таким email уже существует',
+  'Invalid or expired access token': 'Токен доступа недействителен или истек',
+  'Invalid or expired refresh token': 'Сессия истекла. Выполните вход повторно',
   'Template key must be unique': 'Шаблон с таким типом уже существует',
   'Project name must be unique': 'Проект с таким названием уже существует',
   'Persona name must be unique': 'Персонаж с таким именем уже существует',

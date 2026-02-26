@@ -33,8 +33,8 @@ export class ApiTokenGuard implements CanActivate {
       ? authorization.slice('Bearer '.length)
       : '';
 
-    if (!token || !this.authService.isValidToken(token)) {
-      throw new UnauthorizedException('Invalid or missing bearer token');
+    if (!token || !this.authService.isValidAccessToken(token)) {
+      throw new UnauthorizedException('Invalid or expired access token');
     }
 
     return true;
