@@ -1,0 +1,1 @@
+export const IDEA_PIPELINE_STEP_COUNT = 6

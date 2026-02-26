@@ -1,22 +1,22 @@
 import { Card, Group, Select, Stack, Text, Textarea, TextInput, Title, Tooltip } from '@ui/core'
 
 
-import { AppBadge } from '../../../shared/components/AppBadge'
-import { AppButton } from '../../../shared/components/AppButton'
+import { AppBadge } from '../../../../shared/components/AppBadge'
+import { AppButton } from '../../../../shared/components/AppButton'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { type IdeaDetails } from '../../../shared/api/services/ideas.api'
+import { type IdeaDetails } from '../../../../shared/api/services/ideas.api'
 import {
   postDraftsApi,
   type PostDraftExport,
-} from '../../../shared/api/services/postDrafts.api'
-import { formatRuDateTime } from '../../../shared/lib/formatters'
-import { showErrorToast, showSuccessToast, showValidationToast } from '../../../shared/lib/toast'
-import { buildPostDraftExportRoute } from '../../../shared/model/routes'
-import type { IdeasLabIdea } from '../hooks/useIdeasLabController'
-import { formatAssetTypeLabel, resolveAssetUrl } from '../lib/ideasLab.formatters'
-import { postDraftLatestQueryKey } from '../model/ideasLab.constants'
+} from '../../../../shared/api/services/postDrafts.api'
+import { formatRuDateTime } from '../../../../shared/lib/formatters'
+import { showErrorToast, showSuccessToast, showValidationToast } from '../../../../shared/lib/toast'
+import { buildPostDraftExportRoute } from '../../../../shared/model/routes'
+import type { IdeasLabIdea } from '../../hooks/useIdeasLabController'
+import { formatAssetTypeLabel, resolveAssetUrl } from '../../lib/ideasLab.formatters'
+import { postDraftLatestQueryKey } from '../../model/ideasLab.constants'
 import {
   buildTextPreview,
   defaultAssetIds,
@@ -28,8 +28,8 @@ import {
   postDraftStatusColor,
   ruPartsToLocalDatetime,
   toLocalDatetime,
-} from '../model/postDraftPanel.utils'
-import { AssetViewerModal, type AssetViewerPayload } from '../../../shared/components/AssetViewerModal'
+} from '../../model/postDraftPanel.utils'
+import { AssetViewerModal, type AssetViewerPayload } from '../../../../shared/components/AssetViewerModal'
 
 type PostDraftPanelProps = {
   selectedIdea: IdeasLabIdea

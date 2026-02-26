@@ -132,7 +132,7 @@ export function PromptTemplatesSection({ personaId }: { personaId: string | null
   }
 
   const mutationError = createMutation.error ?? updateMutation.error ?? deleteMutation.error
-  const templates = templatesQuery.data ?? []
+  const templates = useMemo(() => templatesQuery.data ?? [], [templatesQuery.data])
 
   const visibleTemplates = useMemo(
     () => filterTemplates(templates, search, filterKey),

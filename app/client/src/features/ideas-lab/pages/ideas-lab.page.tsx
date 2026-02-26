@@ -12,10 +12,10 @@ import {
 } from '../../../shared/model/routes'
 import { AppButton } from '../../../shared/components/AppButton'
 import { AiLogsPanel } from '../components/AiLogsPanel'
-import { IdeaResultsPanel } from '../components/IdeaResultsPanel'
+import { IdeaResultsPanel } from '../components/results/IdeaResultsPanel'
 import { IdeasGenerationPanel } from '../components/IdeasGenerationPanel'
 import { IdeasLabModals } from '../components/IdeasLabModals'
-import { IdeasListPanel } from '../components/IdeasListPanel'
+import { IdeasListPanel } from '../components/list/IdeasListPanel'
 import { useIdeasLabController } from '../hooks/useIdeasLabController'
 
 const workspaceSteps: {

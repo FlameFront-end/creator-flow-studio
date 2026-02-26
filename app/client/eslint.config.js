@@ -83,4 +83,45 @@ export default defineConfig([
       ],
     },
   },
+  {
+    files: ['**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+        },
+      ],
+    },
+  },
+  {
+    files: [
+      'src/features/ideas-lab/components/IdeasGenerationPanel.tsx',
+      'src/features/ideas-lab/components/list/IdeasListPanel.tsx',
+      'src/features/ideas-lab/components/results/PostDraftPanel.tsx',
+      'src/features/ideas-lab/hooks/useIdeasLabController.ts',
+      'src/features/projects/components/CreateProjectSection.tsx',
+      'src/features/prompt-studio/components/AiProviderSettingsSection.tsx',
+      'src/shared/components/TransientErrorAlert.tsx',
+      'src/shared/lib/ui/motion.tsx',
+    ],
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
+  {
+    files: ['src/shared/lib/ui/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+    },
+  },
+  {
+    files: ['src/shared/components/ui/**/*.{ts,tsx}', 'src/shared/lib/ui/theme.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

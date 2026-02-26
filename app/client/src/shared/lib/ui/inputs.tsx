@@ -105,7 +105,8 @@ export function TextInput(props: TextInputProps) {
     id,
     ...restProps
   } = props
-  const inputId = id ?? useId()
+  const generatedId = useId()
+  const inputId = id ?? generatedId
   const { rest, style } = splitSystemProps(restProps)
 
   return (
@@ -175,7 +176,8 @@ export function NumberInput(props: NumberInputProps) {
     onChange,
     ...restProps
   } = props
-  const inputId = id ?? useId()
+  const generatedId = useId()
+  const inputId = id ?? generatedId
   const { rest, style } = splitSystemProps(restProps)
 
   return (
@@ -256,7 +258,8 @@ export function Textarea(props: TextareaProps) {
     value,
     ...restProps
   } = props
-  const inputId = id ?? useId()
+  const generatedId = useId()
+  const inputId = id ?? generatedId
   const { rest, style } = splitSystemProps(restProps)
   const ref = useRef<HTMLTextAreaElement | null>(null)
 
@@ -366,7 +369,8 @@ export function Select(props: SelectProps) {
     ...restProps
   } = props
 
-  const inputId = id ?? useId()
+  const generatedId = useId()
+  const inputId = id ?? generatedId
   const options = useMemo(() => normalizeSelectData(data), [data])
   const { rest, style } = splitSystemProps(restProps as Record<string, unknown>)
 
