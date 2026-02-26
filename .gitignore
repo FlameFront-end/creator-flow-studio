@@ -35,5 +35,6 @@ Thumbs.db
 *.pid
 *.seed
 *.pid.lock
-storage/
+/storage/
+/app/server/storage/
 AGENTS.md
