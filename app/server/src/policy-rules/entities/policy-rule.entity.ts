@@ -2,8 +2,10 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { Persona } from '../../personas/entities/persona.entity';
 
 export enum PolicyRuleType {
   DO = 'DO',
@@ -20,6 +22,9 @@ export class PolicyRule {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  @Column({ type: 'uuid', nullable: true })
+  personaId!: string | null;
+
   @Column({ type: 'varchar', length: 8 })
   type!: PolicyRuleType;
 
@@ -31,4 +36,7 @@ export class PolicyRule {
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
+
+  @ManyToOne(() => Persona, { onDelete: 'CASCADE' })
+  persona!: Persona;
 }

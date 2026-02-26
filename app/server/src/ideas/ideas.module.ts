@@ -28,6 +28,10 @@ import { OpenAiProvider } from './llm/openai.provider';
 import { OpenRouterProvider } from './llm/openrouter.provider';
 import { RoutingLlmProvider } from './llm/routing-llm.provider';
 import { IdeasPromptGenerationService } from './ideas-prompt-generation.service';
+import { IdeasReadService } from './ideas-read.service';
+import { IdeasWorkerCaptionJobService } from './ideas-worker-caption-job.service';
+import { IdeasWorkerErrorService } from './ideas-worker-error.service';
+import { IdeasWorkerIdeasJobService } from './ideas-worker-ideas-job.service';
 import { IdeasWorkerResponseNormalizerService } from './ideas-worker-response-normalizer.service';
 import { IdeasService } from './ideas.service';
 import { IdeasWorkerRunner } from './ideas.worker-runner';
@@ -49,8 +53,12 @@ import { IdeasWorkerRunner } from './ideas.worker-runner';
   controllers: [IdeasController],
   providers: [
     AiQueueService,
+    IdeasReadService,
     IdeasService,
     IdeasPromptGenerationService,
+    IdeasWorkerCaptionJobService,
+    IdeasWorkerErrorService,
+    IdeasWorkerIdeasJobService,
     IdeasWorkerResponseNormalizerService,
     IdeasWorkerRunner,
     OpenAiProvider,

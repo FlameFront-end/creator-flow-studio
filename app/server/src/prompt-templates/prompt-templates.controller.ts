@@ -9,8 +9,10 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CreatePromptTemplateDto } from './dto/create-prompt-template.dto';
+import { ListPromptTemplatesQueryDto } from './dto/list-prompt-templates-query.dto';
 import { UpdatePromptTemplateDto } from './dto/update-prompt-template.dto';
 import { PromptTemplate } from './entities/prompt-template.entity';
 import { PromptTemplatesService } from './prompt-templates.service';
@@ -27,8 +29,10 @@ export class PromptTemplatesController {
   }
 
   @Get()
-  findAll(): Promise<PromptTemplate[]> {
-    return this.promptTemplatesService.findAll();
+  findAll(
+    @Query() query: ListPromptTemplatesQueryDto,
+  ): Promise<PromptTemplate[]> {
+    return this.promptTemplatesService.findAll(query);
   }
 
   @Get(':id')

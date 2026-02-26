@@ -9,8 +9,10 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CreatePolicyRuleDto } from './dto/create-policy-rule.dto';
+import { ListPolicyRulesQueryDto } from './dto/list-policy-rules-query.dto';
 import { UpdatePolicyRuleDto } from './dto/update-policy-rule.dto';
 import { PolicyRule } from './entities/policy-rule.entity';
 import { PolicyRulesService } from './policy-rules.service';
@@ -25,8 +27,8 @@ export class PolicyRulesController {
   }
 
   @Get()
-  findAll(): Promise<PolicyRule[]> {
-    return this.policyRulesService.findAll();
+  findAll(@Query() query: ListPolicyRulesQueryDto): Promise<PolicyRule[]> {
+    return this.policyRulesService.findAll(query);
   }
 
   @Get(':id')

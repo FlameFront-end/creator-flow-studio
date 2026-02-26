@@ -1,7 +1,18 @@
-import { IsEnum, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { PromptTemplateKey } from '../entities/prompt-template.entity';
 
 export class CreatePromptTemplateDto {
+  @IsOptional()
+  @IsUUID()
+  personaId?: string;
+
   @IsEnum(PromptTemplateKey)
   key!: PromptTemplateKey;
 

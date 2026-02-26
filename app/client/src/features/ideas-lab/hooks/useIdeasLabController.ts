@@ -49,9 +49,14 @@ export const useIdeasLabController = () => {
   const [isLogsCollapsed, setIsLogsCollapsed] = useState<boolean>(readIdeasLogsCollapsed)
   const [isWaitingForIdeas, setIsWaitingForIdeas] = useState(false)
   const [ideasGenerationBaselineLogIds, setIdeasGenerationBaselineLogIds] = useState<string[] | null>(null)
+  const [ideasGenerationBaselineIdeasCount, setIdeasGenerationBaselineIdeasCount] = useState<number | null>(null)
 
   const projectsQuery = useQuery({ queryKey: PROJECTS_QUERY_KEY, queryFn: projectsApi.getProjects })
-  const personasQuery = useQuery({ queryKey: PERSONAS_QUERY_KEY, queryFn: personasApi.getPersonas })
+  const personasQuery = useQuery({
+    queryKey: [...PERSONAS_QUERY_KEY, projectId],
+    queryFn: () => personasApi.getPersonas(projectId ?? undefined),
+    enabled: Boolean(projectId),
+  })
 
   useEffect(() => {
     writeIdeasLogsCollapsed(isLogsCollapsed)
@@ -96,11 +101,19 @@ export const useIdeasLabController = () => {
   })
 
   useEffect(() => {
-    if ((ideasQuery.data?.length ?? 0) > 0) {
-      setIsWaitingForIdeas(false)
-      setIdeasGenerationBaselineLogIds(null)
+    if (!isWaitingForIdeas || ideasGenerationBaselineIdeasCount === null) {
+      return
     }
-  }, [ideasQuery.data])
+
+    const currentIdeasCount = ideasQuery.data?.length ?? 0
+    if (currentIdeasCount <= ideasGenerationBaselineIdeasCount) {
+      return
+    }
+
+    setIsWaitingForIdeas(false)
+    setIdeasGenerationBaselineLogIds(null)
+    setIdeasGenerationBaselineIdeasCount(null)
+  }, [ideasGenerationBaselineIdeasCount, isWaitingForIdeas, ideasQuery.data])
 
   useEffect(() => {
     if (!isWaitingForIdeas || ideasGenerationBaselineLogIds === null || !logsQuery.data?.length) {
@@ -124,6 +137,7 @@ export const useIdeasLabController = () => {
 
     setIsWaitingForIdeas(false)
     setIdeasGenerationBaselineLogIds(null)
+    setIdeasGenerationBaselineIdeasCount(null)
   }, [ideasGenerationBaselineLogIds, isWaitingForIdeas, logsQuery.data])
 
   useEffect(() => {
@@ -207,6 +221,7 @@ export const useIdeasLabController = () => {
     onError: (error) => {
       setIsWaitingForIdeas(false)
       setIdeasGenerationBaselineLogIds(null)
+      setIdeasGenerationBaselineIdeasCount(null)
       showErrorToast(error, 'Не удалось поставить задачу в очередь')
     },
   })
@@ -345,6 +360,7 @@ export const useIdeasLabController = () => {
     setIdeasGenerationBaselineLogIds(
       (logsQuery.data ?? []).filter((log) => log.operation === 'ideas').map((log) => log.id),
     )
+    setIdeasGenerationBaselineIdeasCount(ideasQuery.data?.length ?? 0)
     setIsWaitingForIdeas(true)
     return true
   }

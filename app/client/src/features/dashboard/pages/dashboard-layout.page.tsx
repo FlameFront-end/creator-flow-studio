@@ -4,6 +4,7 @@ import { DashboardShell } from '../components/DashboardShell'
 
 const resolveViewByPathname = (pathname: string): DashboardView => {
   if (pathname.startsWith('/dashboard/projects')) return 'projects'
+  if (pathname.startsWith('/dashboard/ai-providers')) return 'ai-providers'
   if (pathname.startsWith('/dashboard/prompt-studio')) return 'prompt-studio'
   return 'ideas-lab'
 }

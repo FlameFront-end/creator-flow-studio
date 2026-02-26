@@ -15,7 +15,7 @@ export class ApiTokenGuard implements CanActivate {
     private readonly authService: AuthService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -33,7 +33,7 @@ export class ApiTokenGuard implements CanActivate {
       ? authorization.slice('Bearer '.length)
       : '';
 
-    if (!token || !this.authService.isValidAccessToken(token)) {
+    if (!token || !(await this.authService.isValidAccessToken(token))) {
       throw new UnauthorizedException('Invalid or expired access token');
     }
 

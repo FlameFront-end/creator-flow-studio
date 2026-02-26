@@ -55,6 +55,15 @@ export const router = createBrowserRouter([
               ),
           },
           {
+            path: DASHBOARD_CHILD_PATHS.AI_PROVIDERS,
+            lazy: () =>
+              lazyImport(() =>
+                import('../../features/ai-providers/pages/ai-providers.page').then((module) => ({
+                  default: module.AiProvidersPage,
+                })),
+              ),
+          },
+          {
             path: DASHBOARD_CHILD_PATHS.IDEAS_LAB,
             element: <Navigate to={buildIdeasLabRoute('brief')} replace />,
           },

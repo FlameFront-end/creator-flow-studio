@@ -4,7 +4,6 @@ import { AiSettingsRateLimitService } from './ai-settings-rate-limit.service';
 import { TestAiSettingsDto } from './dto/test-ai-settings.dto';
 import { AiConnectionTestResult, AiRuntimeConfig } from './ai-settings.types';
 import {
-  AI_HTTP_TIMEOUT_MS,
   fetchWithTimeout,
   isAbortError,
   toErrorMessage,
@@ -218,7 +217,7 @@ export class AiSettingsConnectionTestService {
     } catch (error) {
       if (isAbortError(error)) {
         throw new ServiceUnavailableException(
-          `${providerLabel} connection test timed out after ${AI_HTTP_TIMEOUT_MS}ms`,
+          'AI provider timed out. Please try again in a moment.',
         );
       }
       throw new ServiceUnavailableException(

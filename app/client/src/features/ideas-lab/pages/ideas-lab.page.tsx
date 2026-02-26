@@ -51,7 +51,6 @@ export function IdeasLabPage() {
 
   const ideasCount = controller.ideasQuery.data?.length ?? 0
   const logsCount = controller.logsQuery.data?.length ?? 0
-  const hasSelectedIdea = Boolean(controller.selectedIdea)
   const isPendingIdeasNavigation = searchParams.get('pendingIdeas') === '1'
 
   const buildWorkspaceRoute = useCallback(
@@ -121,13 +120,6 @@ export function IdeasLabPage() {
             <Group gap="xs" wrap="wrap" className="ideas-lab-badges">
               <AppBadge variant="light" className="ideas-lab-badge ideas-lab-badge-neutral">
                 Идей: {ideasCount}
-              </AppBadge>
-              <AppBadge
-                color={hasSelectedIdea ? 'green' : 'red'}
-                variant="light"
-                className={`ideas-lab-badge ${hasSelectedIdea ? 'ideas-lab-badge-success' : 'ideas-lab-badge-danger'}`}
-              >
-                Выбрана идея: {hasSelectedIdea ? 'да' : 'нет'}
               </AppBadge>
               <AppBadge color="cyan" variant="light" className="ideas-lab-badge ideas-lab-badge-info">
                 Логов: {logsCount}

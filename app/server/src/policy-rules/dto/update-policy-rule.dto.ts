@@ -2,6 +2,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -11,6 +12,10 @@ import {
 } from '../entities/policy-rule.entity';
 
 export class UpdatePolicyRuleDto {
+  @IsOptional()
+  @IsUUID()
+  personaId?: string;
+
   @IsOptional()
   @IsEnum(PolicyRuleType)
   type?: PolicyRuleType;

@@ -8,7 +8,7 @@
 export const formatStatusLabel = (status: string): string => {
   switch (status) {
     case 'queued':
-      return 'В очереди'
+      return 'Готов к запуску'
     case 'running':
       return 'Выполняется'
     case 'succeeded':

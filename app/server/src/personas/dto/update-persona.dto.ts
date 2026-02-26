@@ -3,6 +3,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -11,6 +12,10 @@ import {
 } from 'class-validator';
 
 export class UpdatePersonaDto {
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
+
   @IsOptional()
   @IsString()
   @MinLength(2)

@@ -22,7 +22,7 @@ import {
   type TemplateFilterKey,
 } from '../model/promptTemplates.utils'
 
-export function PromptTemplatesSection() {
+export function PromptTemplatesSection({ personaId }: { personaId: string | null }) {
   const queryClient = useQueryClient()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [key, setKey] = useState<PromptTemplateKey>('ideas')
@@ -33,8 +33,12 @@ export function PromptTemplatesSection() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null)
 
   const templatesQuery = useQuery({
-    queryKey: PROMPT_TEMPLATES_QUERY_KEY,
-    queryFn: promptTemplatesApi.getPromptTemplates,
+    queryKey: [...PROMPT_TEMPLATES_QUERY_KEY, personaId],
+    queryFn: () =>
+      promptTemplatesApi.getPromptTemplates({
+        personaId: personaId ?? undefined,
+      }),
+    enabled: Boolean(personaId),
   })
 
   const refreshTemplates = async () => {
@@ -90,8 +94,12 @@ export function PromptTemplatesSection() {
       showValidationToast('Шаблон должен быть не короче 10 символов')
       return
     }
+    if (!personaId) {
+      showValidationToast('Сначала выберите персонажа')
+      return
+    }
 
-    const payload = { key, template: template.trim() }
+    const payload = { personaId, key, template: template.trim() }
     if (editingId) {
       updateMutation.mutate({ id: editingId, payload })
       return
@@ -155,12 +163,7 @@ export function PromptTemplatesSection() {
       <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="md" className="prompt-templates-layout">
         <Paper className="inner-surface prompt-templates-editor" radius="md" p="md">
           <Stack gap="sm">
-            <Group justify="space-between" align="center">
-              <Title order={4}>{editingId ? 'Редактирование шаблона' : 'Новый шаблон'}</Title>
-              <AppBadge color={editingId ? 'cyan' : 'gray'} variant="light">
-                {editingId ? 'Режим редактирования' : 'Режим создания'}
-              </AppBadge>
-            </Group>
+            <Title order={4}>{editingId ? 'Редактирование шаблона' : 'Новый шаблон'}</Title>
 
             <Text size="sm" c="dimmed">
               Шаблон используется как основа для генерации промптов. Переменные задаются в формате
@@ -224,26 +227,34 @@ export function PromptTemplatesSection() {
                 </AppBadge>
               </Group>
 
-              <Group grow>
-                <Select
-                  label="Фильтр по типу"
-                  value={filterKey}
-                  onChange={(value) => setFilterKey((value as TemplateFilterKey) ?? 'all')}
-                  data={templateTypeOptions}
-                  allowDeselect={false}
-                />
-                <TextInput
-                  label="Поиск"
-                  value={search}
-                  onChange={(event) => setSearch(event.currentTarget.value)}
-                  placeholder="По названию или тексту шаблона"
-                  leftSection={<IconSearch size={16} />}
-                />
+              <Group gap="md" align="flex-end">
+                <div style={{ flex: '0 0 220px', minWidth: '220px' }}>
+                  <Select
+                    label="Фильтр по типу"
+                    value={filterKey}
+                    onChange={(value) => setFilterKey((value as TemplateFilterKey) ?? 'all')}
+                    data={templateTypeOptions}
+                    allowDeselect={false}
+                  />
+                </div>
+                <div style={{ flex: '1 1 320px', minWidth: '260px' }}>
+                  <TextInput
+                    label="Поиск"
+                    value={search}
+                    onChange={(event) => setSearch(event.currentTarget.value)}
+                    placeholder="По названию или тексту шаблона"
+                    leftSection={<IconSearch size={16} />}
+                  />
+                </div>
               </Group>
             </Stack>
           </Paper>
 
-          {!templates.length ? (
+          {!personaId ? (
+            <Paper className="inner-surface" radius="md" p="md">
+              <Text c="dimmed">Выберите персонажа, чтобы управлять промптами</Text>
+            </Paper>
+          ) : !templates.length ? (
             <Paper className="inner-surface" radius="md" p="md">
               <Text c="dimmed">Пока нет шаблонов</Text>
             </Paper>

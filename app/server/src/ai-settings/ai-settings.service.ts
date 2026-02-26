@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { isIP } from 'node:net';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AiSettingsCryptoService } from './ai-settings-crypto.service';
@@ -368,12 +369,70 @@ export class AiSettingsService {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       throw new BadRequestException('Base URL must use HTTP or HTTPS');
     }
+    if (this.isForbiddenBaseUrlHost(parsed.hostname)) {
+      throw new BadRequestException(
+        'Base URL host is not allowed for security reasons',
+      );
+    }
 
     return baseUrl;
   }
 
   private stripChatCompletionsSuffix(value: string): string {
     return value.replace(/\/chat\/completions\/?$/i, '').replace(/\/+$/, '');
+  }
+
+  private isForbiddenBaseUrlHost(hostname: string): boolean {
+    const normalized = hostname.trim().toLowerCase();
+    if (!normalized) {
+      return true;
+    }
+
+    if (
+      normalized === 'localhost' ||
+      normalized.endsWith('.localhost') ||
+      normalized === '127.0.0.1' ||
+      normalized === '::1'
+    ) {
+      return false;
+    }
+
+    if (normalized === '0.0.0.0' || normalized === '::') {
+      return true;
+    }
+
+    const ipVersion = isIP(normalized);
+    if (ipVersion === 4) {
+      const octets = normalized.split('.').map((item) => Number(item));
+      const [a, b] = octets;
+      if (a === 10) {
+        return true;
+      }
+      if (a === 127) {
+        return true;
+      }
+      if (a === 169 && b === 254) {
+        return true;
+      }
+      if (a === 172 && b >= 16 && b <= 31) {
+        return true;
+      }
+      if (a === 192 && b === 168) {
+        return true;
+      }
+    }
+
+    if (ipVersion === 6) {
+      if (
+        normalized.startsWith('fc') ||
+        normalized.startsWith('fd') ||
+        normalized.startsWith('fe80')
+      ) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private normalizeMaxTokens(value: number): number {

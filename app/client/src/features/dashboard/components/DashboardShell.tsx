@@ -8,6 +8,7 @@ import { DashboardHero } from './DashboardHero'
 const viewRouteMap: Record<DashboardView, string> = {
   projects: ROUTES.DASHBOARD_PROJECTS,
   'prompt-studio': ROUTES.DASHBOARD_PROMPT_STUDIO,
+  'ai-providers': ROUTES.DASHBOARD_AI_PROVIDERS,
   'ideas-lab': ROUTES.DASHBOARD_IDEAS_LAB,
 }
 

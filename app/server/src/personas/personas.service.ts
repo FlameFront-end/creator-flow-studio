@@ -6,23 +6,29 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import { CreatePersonaDto } from './dto/create-persona.dto';
+import { ListPersonasQueryDto } from './dto/list-personas-query.dto';
 import { UpdatePersonaDto } from './dto/update-persona.dto';
 import { Persona } from './entities/persona.entity';
+import { Project } from '../projects/entities/project.entity';
 
-const PERSONA_NAME_UNIQUE_INDEX = 'UQ_personas_name_ci';
+const PERSONA_NAME_UNIQUE_INDEX = 'UQ_personas_project_name_ci';
 
 @Injectable()
 export class PersonasService {
   constructor(
     @InjectRepository(Persona)
     private readonly personasRepository: Repository<Persona>,
+    @InjectRepository(Project)
+    private readonly projectsRepository: Repository<Project>,
   ) {}
 
   async create(dto: CreatePersonaDto): Promise<Persona> {
+    await this.ensureProjectExists(dto.projectId);
     const normalizedName = dto.name.trim();
-    await this.ensureUniqueName(normalizedName);
+    await this.ensureUniqueName(normalizedName, dto.projectId);
 
     const persona = this.personasRepository.create({
+      projectId: dto.projectId,
       name: normalizedName,
       age: dto.age ?? null,
       archetypeTone: dto.archetypeTone?.trim() || null,
@@ -33,8 +39,10 @@ export class PersonasService {
     return this.saveWithConflictHandling(persona);
   }
 
-  findAll(): Promise<Persona[]> {
+  findAll(query: ListPersonasQueryDto): Promise<Persona[]> {
+    const where = query.projectId ? { projectId: query.projectId } : {};
     return this.personasRepository.find({
+      where,
       order: {
         createdAt: 'DESC',
       },
@@ -51,9 +59,13 @@ export class PersonasService {
 
   async update(id: string, dto: UpdatePersonaDto): Promise<Persona> {
     const persona = await this.findOne(id);
+    if (dto.projectId !== undefined) {
+      await this.ensureProjectExists(dto.projectId);
+      persona.projectId = dto.projectId;
+    }
     if (dto.name !== undefined) {
       const normalizedName = dto.name.trim();
-      await this.ensureUniqueName(normalizedName, id);
+      await this.ensureUniqueName(normalizedName, persona.projectId, id);
       persona.name = normalizedName;
     }
     if (dto.age !== undefined) {
@@ -82,11 +94,18 @@ export class PersonasService {
 
   private async ensureUniqueName(
     name: string,
+    projectId: string | null,
     excludeId?: string,
   ): Promise<void> {
     const query = this.personasRepository
       .createQueryBuilder('persona')
       .where('LOWER(persona.name) = LOWER(:name)', { name });
+
+    if (projectId) {
+      query.andWhere('persona.projectId = :projectId', { projectId });
+    } else {
+      query.andWhere('persona.projectId IS NULL');
+    }
 
     if (excludeId) {
       query.andWhere('persona.id != :excludeId', { excludeId });
@@ -122,5 +141,12 @@ export class PersonasService {
       queryError.code === '23505' &&
       queryError.constraint === PERSONA_NAME_UNIQUE_INDEX
     );
+  }
+
+  private async ensureProjectExists(projectId: string): Promise<void> {
+    const exists = await this.projectsRepository.existsBy({ id: projectId });
+    if (!exists) {
+      throw new NotFoundException('Project not found');
+    }
   }
 }

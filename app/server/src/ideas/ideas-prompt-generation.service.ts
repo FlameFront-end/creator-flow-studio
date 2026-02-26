@@ -1,4 +1,10 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  GatewayTimeoutException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
@@ -11,13 +17,14 @@ import {
 import { AiOperation, AiRunLog } from './entities/ai-run-log.entity';
 import { GenerationStatus } from './entities/generation-status.enum';
 import { Idea } from './entities/idea.entity';
+import { Script } from './entities/script.entity';
 import {
   DEFAULT_IMAGE_MAX_PROMPT_CHARS,
   DEFAULT_VIDEO_MAX_PROMPT_CHARS,
 } from './ideas.constants';
 import { LLM_PROVIDER_TOKEN } from './llm/llm-provider.interface';
 import type { LlmProvider } from './llm/llm-provider.interface';
-import { LlmResponseError } from './llm/llm-response.error';
+import { isLlmTimeoutError, LlmResponseError } from './llm/llm-response.error';
 import {
   buildMockImagePrompt,
   buildMockVideoPrompt,
@@ -39,6 +46,8 @@ export class IdeasPromptGenerationService {
     private readonly llmProvider: LlmProvider,
     @InjectRepository(Idea)
     private readonly ideasRepository: Repository<Idea>,
+    @InjectRepository(Script)
+    private readonly scriptsRepository: Repository<Script>,
     @InjectRepository(AiRunLog)
     private readonly logsRepository: Repository<AiRunLog>,
   ) {}
@@ -85,10 +94,15 @@ export class IdeasPromptGenerationService {
     if (!idea) {
       throw new NotFoundException('Idea not found');
     }
+    const script = await this.findLatestSucceededScript(idea.id);
+    if (!script) {
+      throw new ConflictException('Script is required. Generate script first.');
+    }
 
     const startedAt = Date.now();
     const runtimeConfig = await this.aiSettingsService.getRuntimeConfig();
     try {
+      const scriptShotList = this.toShotListText(script.shotList);
       const promptPreview = await this.promptService.preview({
         personaId: idea.personaId,
         templateKey: params.templateKey,
@@ -98,18 +112,33 @@ export class IdeasPromptGenerationService {
           hook: idea.hook,
           idea_hook: idea.hook,
           format: idea.format,
+          script: script.text ?? '',
+          script_text: script.text ?? '',
+          shot_list: scriptShotList,
+          shots: scriptShotList,
+          language: runtimeConfig.responseLanguage,
+          response_language: runtimeConfig.responseLanguage,
+          output_language: runtimeConfig.responseLanguage,
         },
       });
       const response = await this.llmProvider.generateJson<PromptResponse>({
         prompt: `${promptPreview.prompt}
 
+SCRIPT CONTEXT:
+Script text:
+${script.text ?? 'n/a'}
+Shot list:
+${scriptShotList}
+
 STRICT OUTPUT CONTRACT:
 - Return a single JSON object only.
 - Do not use markdown code fences.
 - Do not include explanations or extra keys.
+- Write the "prompt" value strictly in "${runtimeConfig.responseLanguage}", matching the locale exactly and using only that language/script.
+- Do not switch to any other language or include characters from other scripts (e.g., no 日常 or other non-${runtimeConfig.responseLanguage} glyphs).
 - Required shape:
 {
-  "prompt":"detailed ${params.promptKind} prompt"
+  "prompt":"${params.promptKind} generation prompt text"
 }`,
         maxTokens: runtimeConfig.maxTokens,
         temperature: 0.7,
@@ -188,6 +217,11 @@ STRICT OUTPUT CONTRACT:
           rawResponse: normalizeAiRunLogRawResponse(details.rawResponse),
         }),
       );
+      if (isLlmTimeoutError(error)) {
+        throw new GatewayTimeoutException(
+          'AI provider timed out. Please try again in a moment.',
+        );
+      }
       throw error;
     }
   }
@@ -256,5 +290,30 @@ STRICT OUTPUT CONTRACT:
       code: null,
       rawResponse: null,
     };
+  }
+
+  private async findLatestSucceededScript(
+    ideaId: string,
+  ): Promise<Script | null> {
+    return this.scriptsRepository.findOne({
+      where: {
+        ideaId,
+        status: GenerationStatus.SUCCEEDED,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
+
+  private toShotListText(shotList: string[] | null): string {
+    if (!shotList?.length) {
+      return '-';
+    }
+    return shotList
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item, index) => `${index + 1}. ${item}`)
+      .join('\n');
   }
 }

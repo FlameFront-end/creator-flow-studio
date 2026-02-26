@@ -1,10 +1,21 @@
-import { IsEnum, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import {
   PolicyRuleSeverity,
   PolicyRuleType,
 } from '../entities/policy-rule.entity';
 
 export class CreatePolicyRuleDto {
+  @IsOptional()
+  @IsUUID()
+  personaId?: string;
+
   @IsEnum(PolicyRuleType)
   type!: PolicyRuleType;
 

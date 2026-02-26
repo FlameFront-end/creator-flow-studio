@@ -1,4 +1,5 @@
 export const AI_GENERATION_QUEUE = 'ai-generation';
+export const AI_GENERATION_DLQ = 'ai-generation-dlq';
 
 export enum AiJobName {
   GENERATE_IDEAS = 'generate-ideas',

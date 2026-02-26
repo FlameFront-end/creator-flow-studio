@@ -17,3 +17,8 @@ export class LlmResponseError extends Error {
     this.rawResponse = options?.rawResponse ?? null;
   }
 }
+
+export const isLlmTimeoutError = (error: unknown): error is LlmResponseError =>
+  error instanceof LlmResponseError &&
+  error.code === 'provider_request_failed' &&
+  error.message.toLowerCase().includes('timed out');

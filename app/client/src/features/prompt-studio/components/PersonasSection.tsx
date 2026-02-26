@@ -1,4 +1,4 @@
-import { ActionIcon, Group, NumberInput, SimpleGrid, Stack, Text, Textarea, TextInput, Title } from '@ui/core'
+import { ActionIcon, Group, NumberInput, Paper, SimpleGrid, Stack, Text, Textarea, TextInput } from '@ui/core'
 
 import { AppButton } from '../../../shared/components/AppButton'
 import { AppInlineErrorAlert } from '../../../shared/components/AppInlineErrorAlert'
@@ -13,7 +13,7 @@ import { getErrorMessage } from '../../../shared/lib/httpError'
 import { showErrorToast, showSuccessToast, showValidationToast } from '../../../shared/lib/toast'
 import { PERSONAS_QUERY_KEY } from '../model/promptStudio.queryKeys'
 
-export function PersonasSection() {
+export function PersonasSection({ projectId }: { projectId: string | null }) {
   const queryClient = useQueryClient()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [name, setName] = useState('')
@@ -25,8 +25,9 @@ export function PersonasSection() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
   const personasQuery = useQuery({
-    queryKey: PERSONAS_QUERY_KEY,
-    queryFn: personasApi.getPersonas,
+    queryKey: [...PERSONAS_QUERY_KEY, projectId],
+    queryFn: () => personasApi.getPersonas(projectId ?? undefined),
+    enabled: Boolean(projectId),
   })
 
   const refreshPersonas = async () => {
@@ -82,8 +83,13 @@ export function PersonasSection() {
       showValidationToast('Имя персонажа должно быть не короче 2 символов')
       return
     }
+    if (!projectId) {
+      showValidationToast('Сначала выберите проект')
+      return
+    }
 
     const payload = {
+      projectId,
       name: name.trim(),
       age: age === '' ? undefined : age,
       archetypeTone: archetypeTone || undefined,
@@ -187,8 +193,7 @@ export function PersonasSection() {
             styles={{ input: { resize: 'vertical' } }}
           />
 
-          <Group justify="space-between">
-            <Title order={5}>{editingId ? 'Редактирование персонажа' : 'Создание персонажа'}</Title>
+          <Group justify="flex-end">
             <Group>
               {editingId ? (
                 <AppButton variant="default" onClick={resetForm}>
@@ -209,8 +214,20 @@ export function PersonasSection() {
         </AppInlineErrorAlert>
       ) : null}
 
-      {!personasQuery.data?.length ? (
-        <Text c="dimmed">Пока нет персонажей</Text>
+      {!projectId ? (
+        <Paper className="inner-surface prompt-studio-empty-state" radius="md" p="md">
+          <Stack gap={4}>
+            <Text fw={600}>Проект не выбран</Text>
+            <Text c="dimmed">Выберите проект, чтобы управлять персонажами</Text>
+          </Stack>
+        </Paper>
+      ) : !personasQuery.data?.length ? (
+        <Paper className="inner-surface prompt-studio-empty-state" radius="md" p="md">
+          <Stack gap={4}>
+            <Text fw={600}>Персонажей пока нет</Text>
+            <Text c="dimmed">Заполните форму выше и нажмите «Создать»</Text>
+          </Stack>
+        </Paper>
       ) : (
         <AppTable>
           <AppTable.Thead>

@@ -3,7 +3,6 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { IconPlus, IconTrash } from '@tabler/icons-react'
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { personasApi } from '../../../shared/api/services/personas.api'
 import { promptPreviewApi } from '../../../shared/api/services/promptPreview.api'
 import { promptTemplatesApi } from '../../../shared/api/services/promptTemplates.api'
 import type { PromptTemplateKey } from '../../../shared/api/services/promptTemplates.api'
@@ -14,19 +13,19 @@ import { getErrorMessage } from '../../../shared/lib/httpError'
 import { showErrorToast, showSuccessToast } from '../../../shared/lib/toast'
 import { TEMPLATE_KEYS, TEMPLATE_KEY_LABEL } from '../model/promptStudio.constants'
 import type { PreviewVariableType } from '../model/promptStudio.constants'
-import { PERSONAS_QUERY_KEY, PROMPT_TEMPLATES_QUERY_KEY } from '../model/promptStudio.queryKeys'
+import { PROMPT_TEMPLATES_QUERY_KEY } from '../model/promptStudio.queryKeys'
 
-export function PromptPreviewSection() {
-  const personasQuery = useQuery({
-    queryKey: PERSONAS_QUERY_KEY,
-    queryFn: personasApi.getPersonas,
-  })
+export function PromptPreviewSection({ personaId }: { personaId: string | null }) {
   const templatesQuery = useQuery({
-    queryKey: PROMPT_TEMPLATES_QUERY_KEY,
-    queryFn: promptTemplatesApi.getPromptTemplates,
+    queryKey: [...PROMPT_TEMPLATES_QUERY_KEY, 'preview', personaId],
+    queryFn: () =>
+      promptTemplatesApi.getPromptTemplates({
+        personaId: personaId ?? undefined,
+        includeGlobal: true,
+      }),
+    enabled: Boolean(personaId),
   })
 
-  const [personaId, setPersonaId] = useState<string | null>(null)
   const [templateKey, setTemplateKey] = useState<PromptTemplateKey>('ideas')
   const [variablesMap, setVariablesMap] = useState<Record<string, string | number | boolean>>({
     topic: 'вдохновляющий рилс для блогера',
@@ -178,19 +177,7 @@ export function PromptPreviewSection() {
             <Stack gap="sm">
               <Title order={5}>Конфигурация</Title>
 
-              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                <Select
-                  label="Персонаж"
-                  value={personaId}
-                  onChange={setPersonaId}
-                  data={(personasQuery.data ?? []).map((persona) => ({
-                    value: persona.id,
-                    label: persona.name,
-                  }))}
-                  placeholder="Выберите персонажа"
-                  searchable
-                />
-
+              <SimpleGrid cols={{ base: 1 }} spacing="sm">
                 <Select
                   label="Тип шаблона"
                   value={templateKey}
@@ -203,6 +190,11 @@ export function PromptPreviewSection() {
               {!hasTemplate ? (
                 <Alert color="yellow" title="Внимание" variant="light">
                   Нет активного текста для выбранного шаблона. Сначала сохраните шаблон во вкладке "Шаблоны".
+                </Alert>
+              ) : null}
+              {!personaId ? (
+                <Alert color="yellow" title="Внимание" variant="light">
+                  Сначала выберите персонажа в контексте сверху.
                 </Alert>
               ) : null}
 

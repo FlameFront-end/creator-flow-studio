@@ -1,4 +1,4 @@
-import { ActionIcon, Group, Select, SimpleGrid, Stack, Text, Textarea, Title } from '@ui/core'
+import { ActionIcon, Group, Paper, Select, SimpleGrid, Stack, Text, Textarea } from '@ui/core'
 
 
 import { AppBadge } from '../../../shared/components/AppBadge'
@@ -16,7 +16,7 @@ import { getErrorMessage } from '../../../shared/lib/httpError'
 import { showErrorToast, showSuccessToast, showValidationToast } from '../../../shared/lib/toast'
 import { POLICY_RULES_QUERY_KEY } from '../model/promptStudio.queryKeys'
 
-export function PolicyRulesSection() {
+export function PolicyRulesSection({ personaId }: { personaId: string | null }) {
   const queryClient = useQueryClient()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [type, setType] = useState<PolicyRuleType>('DO')
@@ -25,8 +25,9 @@ export function PolicyRulesSection() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; text: string } | null>(null)
 
   const rulesQuery = useQuery({
-    queryKey: POLICY_RULES_QUERY_KEY,
-    queryFn: policyRulesApi.getPolicyRules,
+    queryKey: [...POLICY_RULES_QUERY_KEY, personaId],
+    queryFn: () => policyRulesApi.getPolicyRules({ personaId: personaId ?? undefined }),
+    enabled: Boolean(personaId),
   })
 
   const refreshPolicyRules = async () => {
@@ -82,8 +83,12 @@ export function PolicyRulesSection() {
       showValidationToast('Текст правила должен быть не короче 3 символов')
       return
     }
+    if (!personaId) {
+      showValidationToast('Сначала выберите персонажа')
+      return
+    }
 
-    const payload = { type, severity, text: text.trim() }
+    const payload = { personaId, type, severity, text: text.trim() }
     if (editingId) {
       updateMutation.mutate({ id: editingId, payload })
       return
@@ -159,8 +164,7 @@ export function PolicyRulesSection() {
             styles={{ input: { resize: 'vertical' } }}
           />
 
-          <Group justify="space-between">
-            <Title order={5}>{editingId ? 'Редактирование правила' : 'Создание правила'}</Title>
+          <Group justify="flex-end">
             <Group>
               {editingId ? (
                 <AppButton variant="default" onClick={resetForm}>
@@ -187,8 +191,20 @@ export function PolicyRulesSection() {
         </AppInlineErrorAlert>
       ) : null}
 
-      {!rulesQuery.data?.length ? (
-        <Text c="dimmed">Пока нет правил</Text>
+      {!personaId ? (
+        <Paper className="inner-surface prompt-studio-empty-state" radius="md" p="md">
+          <Stack gap={4}>
+            <Text fw={600}>Персонаж не выбран</Text>
+            <Text c="dimmed">Выберите персонажа, чтобы управлять ограничениями</Text>
+          </Stack>
+        </Paper>
+      ) : !rulesQuery.data?.length ? (
+        <Paper className="inner-surface prompt-studio-empty-state" radius="md" p="md">
+          <Stack gap={4}>
+            <Text fw={600}>Правил пока нет</Text>
+            <Text c="dimmed">Добавьте первое правило через форму выше</Text>
+          </Stack>
+        </Paper>
       ) : (
         <AppTable>
           <AppTable.Thead>

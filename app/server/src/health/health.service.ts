@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import IORedis from 'ioredis';
 import { DataSource } from 'typeorm';
+import { HealthRedisService } from './health-redis.service';
 
 type DependencyName = 'database' | 'redis';
 type DependencyStatus = 'up' | 'down';
@@ -19,16 +19,12 @@ export type ReadinessPayload = {
   dependencies: DependencyCheck[];
 };
 
-const toNumber = (value: string | undefined, fallback: number): number => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
 @Injectable()
 export class HealthService {
   constructor(
     @InjectDataSource()
     private readonly dataSource: DataSource,
+    private readonly healthRedisService: HealthRedisService,
   ) {}
 
   async checkReadiness(): Promise<ReadinessPayload> {
@@ -68,15 +64,8 @@ export class HealthService {
 
   private async checkRedis(): Promise<DependencyCheck> {
     const startedAt = Date.now();
-    const redis = new IORedis({
-      host: process.env.REDIS_HOST ?? '127.0.0.1',
-      port: toNumber(process.env.REDIS_PORT, 6379),
-      password: process.env.REDIS_PASSWORD || undefined,
-      maxRetriesPerRequest: null,
-    });
-
     try {
-      await redis.ping();
+      await this.healthRedisService.ping();
       return {
         name: 'redis',
         status: 'up',
@@ -90,12 +79,6 @@ export class HealthService {
         latencyMs: Date.now() - startedAt,
         error: this.toErrorMessage(error),
       };
-    } finally {
-      try {
-        await redis.quit();
-      } catch {
-        redis.disconnect();
-      }
     }
   }
 

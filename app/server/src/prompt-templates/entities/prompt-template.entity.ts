@@ -2,8 +2,10 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { Persona } from '../../personas/entities/persona.entity';
 
 export enum PromptTemplateKey {
   IDEAS = 'ideas',
@@ -18,7 +20,10 @@ export class PromptTemplate {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ type: 'varchar', length: 32, unique: true })
+  @Column({ type: 'uuid', nullable: true })
+  personaId!: string | null;
+
+  @Column({ type: 'varchar', length: 32 })
   key!: PromptTemplateKey;
 
   @Column({ type: 'text' })
@@ -26,4 +31,7 @@ export class PromptTemplate {
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
+
+  @ManyToOne(() => Persona, { onDelete: 'CASCADE' })
+  persona!: Persona;
 }

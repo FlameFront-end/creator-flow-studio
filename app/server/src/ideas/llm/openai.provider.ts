@@ -6,11 +6,12 @@ import {
 } from './llm-provider.interface';
 import { LlmResponseError } from './llm-response.error';
 import {
-  AI_HTTP_TIMEOUT_MS,
   fetchWithTimeout,
+  getAiHttpTimeoutMs,
   isAbortError,
   toErrorMessage,
 } from '../../common/network/fetch-with-timeout';
+import { parseOpenAiLikePayload } from './openai-like-response-parser';
 
 type OpenAiChatCompletionResponse = {
   id: string;
@@ -82,27 +83,28 @@ export class OpenAiProvider implements LlmProvider {
       });
     } catch (error) {
       const message = isAbortError(error)
-        ? `OpenAI request timed out after ${AI_HTTP_TIMEOUT_MS}ms`
+        ? `OpenAI request timed out after ${getAiHttpTimeoutMs()}ms`
         : `OpenAI request failed before response: ${toErrorMessage(error, 'unknown network error')}`;
       throw new LlmResponseError(message, 'provider_request_failed');
     }
 
-    const payload = (await response.json()) as OpenAiChatCompletionResponse;
+    const { payload, rawText } =
+      await parseOpenAiLikePayload<OpenAiChatCompletionResponse>(response);
     if (!response.ok) {
       throw new LlmResponseError(
-        payload.error?.message ?? 'OpenAI request failed',
+        payload?.error?.message ?? 'OpenAI request failed',
         'provider_request_failed',
-        { rawResponse: JSON.stringify(payload) },
+        { rawResponse: rawText || JSON.stringify(payload) },
       );
     }
 
-    const content = payload.choices?.[0]?.message?.content?.trim();
+    const content = payload?.choices?.[0]?.message?.content?.trim();
     if (!content) {
       throw new LlmResponseError(
         'OpenAI response is empty or malformed',
         'empty_response',
         {
-          rawResponse: JSON.stringify(payload),
+          rawResponse: rawText || JSON.stringify(payload),
         },
       );
     }
@@ -120,8 +122,8 @@ export class OpenAiProvider implements LlmProvider {
 
     return {
       provider: this.name,
-      model: payload.model || model,
-      tokens: payload.usage?.total_tokens ?? null,
+      model: payload?.model || model,
+      tokens: payload?.usage?.total_tokens ?? null,
       requestId: response.headers.get('x-request-id'),
       data: parsed,
     };

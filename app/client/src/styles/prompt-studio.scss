@@ -8,6 +8,11 @@
   top: 14px;
 }
 
+.prompt-studio-empty-state {
+  border: 1px dashed rgba(148, 163, 184, 0.36);
+  background: rgba(15, 23, 42, 0.22);
+}
+
 .prompt-template-card {
   background: rgba(14, 14, 14, 0.9);
   border-color: rgba(255, 255, 255, 0.12);
@@ -209,6 +214,11 @@
 }
 
 :root[data-color-scheme='light'] {
+  .prompt-studio-empty-state {
+    border-color: rgba(148, 163, 184, 0.42);
+    background: rgba(248, 250, 252, 0.88);
+  }
+
   .prompt-template-card {
     background: rgba(248, 250, 252, 0.95);
     border-color: rgba(148, 163, 184, 0.42);

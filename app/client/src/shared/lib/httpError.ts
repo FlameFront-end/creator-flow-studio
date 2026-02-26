@@ -11,6 +11,8 @@ const EXACT_ERROR_TRANSLATIONS: Record<string, string> = {
   'Invalid or expired access token': 'Токен доступа недействителен или истек',
   'Invalid or expired refresh token': 'Сессия истекла. Выполните вход повторно',
   'Template key must be unique': 'Шаблон с таким типом уже существует',
+  'Template key must be unique for persona':
+    'Для этого персонажа шаблон такого типа уже существует',
   'Project name must be unique': 'Проект с таким названием уже существует',
   'Persona name must be unique': 'Персонаж с таким именем уже существует',
   'Prompt template not found': 'Шаблон не найден',
@@ -33,6 +35,8 @@ const EXACT_ERROR_TRANSLATIONS: Record<string, string> = {
   'LLM returned empty script text': 'Модель вернула пустой текст сценария',
   'LLM returned empty caption text': 'Модель вернула пустой текст подписи',
   'LLM returned empty image prompt': 'Модель вернула пустой промпт для изображения',
+  'Script is required. Generate script first.':
+    'Сначала сгенерируйте сценарий, затем запускайте этот этап',
   'Image prompt is empty. Generate image prompt first.':
     'Промпт изображения пуст. Сначала сгенерируйте промпт изображения',
   'Video prompt is empty. Generate video prompt first.':
@@ -46,6 +50,8 @@ const EXACT_ERROR_TRANSLATIONS: Record<string, string> = {
     'Base URL должен быть валидным HTTP(S) адресом',
   'Base URL must use HTTP or HTTPS':
     'Base URL должен начинаться с http:// или https://',
+  'Base URL host is not allowed for security reasons':
+    'Хост Base URL запрещен по соображениям безопасности',
   'OPENAI API key is required to save this provider':
     'Для OpenAI необходимо указать API ключ',
   'OPENROUTER API key is required to save this provider':
@@ -56,6 +62,8 @@ const EXACT_ERROR_TRANSLATIONS: Record<string, string> = {
     'Слишком много проверок подключения. Повторите через минуту',
   'AI connection test returned an empty response':
     'Проверка подключения вернула пустой ответ',
+  'AI provider timed out. Please try again in a moment.':
+    'Модель долго не отвечает. Попробуйте ещё раз через несколько секунд',
 }
 
 const translateErrorMessage = (message: string): string => {
@@ -67,6 +75,17 @@ const translateErrorMessage = (message: string): string => {
   const exact = EXACT_ERROR_TRANSLATIONS[normalized]
   if (exact) {
     return exact
+  }
+
+  const aiRateLimitMatch = normalized.match(
+    /^Too many AI connection test requests\. Try again in (\d+) seconds\.$/i,
+  )
+  if (aiRateLimitMatch) {
+    return `Слишком много проверок подключения. Повторите через ${aiRateLimitMatch[1]} сек.`
+  }
+
+  if (/timed out after \d+ms/i.test(normalized)) {
+    return 'Модель долго не отвечает. Попробуйте ещё раз через несколько секунд'
   }
 
   const shouldNotExistMatch = normalized.match(/^property (.+) should not exist$/i)

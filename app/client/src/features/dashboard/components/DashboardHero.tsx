@@ -1,9 +1,15 @@
 ﻿import { useColorScheme } from '@ui/core'
+import { Tooltip } from '@ui/core'
 import { IconBook2, IconLogout2, IconMoonStars, IconSun } from '@tabler/icons-react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppButton } from '../../../shared/components/AppButton'
 import { AppTabs } from '../../../shared/components/AppTabs'
 import { ROUTES, type DashboardView } from '../../../shared/model/routes'
+import {
+  AI_MODELS_BY_PROVIDER_UPDATED_EVENT,
+  readPersistedModelsByProvider,
+} from '../../prompt-studio/model/aiProviderSettings.storage'
 
 type DashboardHeroProps = {
   view: DashboardView
@@ -15,6 +21,32 @@ export const DashboardHero = ({ view, onViewChange, onLogout }: DashboardHeroPro
   const navigate = useNavigate()
   const { colorScheme, setColorScheme } = useColorScheme()
   const isDark = colorScheme === 'dark'
+  const [hasSavedModels, setHasSavedModels] = useState(() => {
+    const models = readPersistedModelsByProvider()
+    return (
+      (models.openai?.length ?? 0) > 0 ||
+      (models.openrouter?.length ?? 0) > 0 ||
+      (models['openai-compatible']?.length ?? 0) > 0
+    )
+  })
+
+  useEffect(() => {
+    const syncSavedModels = () => {
+      const models = readPersistedModelsByProvider()
+      setHasSavedModels(
+        (models.openai?.length ?? 0) > 0 ||
+          (models.openrouter?.length ?? 0) > 0 ||
+          (models['openai-compatible']?.length ?? 0) > 0,
+      )
+    }
+
+    window.addEventListener(AI_MODELS_BY_PROVIDER_UPDATED_EVENT, syncSavedModels)
+    window.addEventListener('storage', syncSavedModels)
+    return () => {
+      window.removeEventListener(AI_MODELS_BY_PROVIDER_UPDATED_EVENT, syncSavedModels)
+      window.removeEventListener('storage', syncSavedModels)
+    }
+  }, [])
 
   return (
     <div className="hero-surface p-6 md:p-8">
@@ -76,6 +108,23 @@ export const DashboardHero = ({ view, onViewChange, onLogout }: DashboardHeroPro
             items={[
               { label: 'Проекты', value: 'projects' },
               { label: 'Настройка ИИ', value: 'prompt-studio' },
+              {
+                label: 'Модели AI',
+                value: 'ai-providers',
+                rightSection: !hasSavedModels ? (
+                  <Tooltip
+                    label="Нет сохранённых моделей"
+                    withArrow
+                    side="top"
+                    sideOffset={10}
+                  >
+                    <span
+                      className="dashboard-tab-alert-dot"
+                      aria-label="Нет сохранённых моделей"
+                    />
+                  </Tooltip>
+                ) : undefined,
+              },
               { label: 'Идеи и сценарии', value: 'ideas-lab' },
             ]}
           />

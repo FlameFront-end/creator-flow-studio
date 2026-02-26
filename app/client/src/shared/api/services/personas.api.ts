@@ -2,6 +2,7 @@ import { axiosInstance } from '../axiosInstance'
 
 export type Persona = {
   id: string
+  projectId: string | null
   name: string
   age: number | null
   archetypeTone: string | null
@@ -12,6 +13,7 @@ export type Persona = {
 }
 
 export type CreatePersonaRequest = {
+  projectId: string
   name: string
   age?: number
   archetypeTone?: string
@@ -23,8 +25,10 @@ export type CreatePersonaRequest = {
 export type UpdatePersonaRequest = Partial<CreatePersonaRequest>
 
 export const personasApi = {
-  async getPersonas(): Promise<Persona[]> {
-    const { data } = await axiosInstance.get<Persona[]>('/personas')
+  async getPersonas(projectId?: string): Promise<Persona[]> {
+    const { data } = await axiosInstance.get<Persona[]>('/personas', {
+      params: projectId ? { projectId } : undefined,
+    })
     return data
   },
   async createPersona(payload: CreatePersonaRequest): Promise<Persona> {

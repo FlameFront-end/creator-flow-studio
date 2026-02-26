@@ -120,7 +120,6 @@ export function AiProviderSettingsSection() {
   const [baseline, setBaseline] = useState<FormState | null>(null)
   const [lastTestResult, setLastTestResult] = useState<TestAiSettingsResponse | null>(null)
   const [lastTestError, setLastTestError] = useState<string | null>(null)
-  const [lastTestRequestedModel, setLastTestRequestedModel] = useState<string>('')
   const [lastVerifiedSignature, setLastVerifiedSignature] = useState<string | null>(null)
   const [pendingTestSignature, setPendingTestSignature] = useState<string | null>(null)
   const [isApiKeyReadonly, setIsApiKeyReadonly] = useState(true)
@@ -191,15 +190,6 @@ export function AiProviderSettingsSection() {
     onError: (error) => {
       setLastTestResult(null)
       const fallback = 'Проверка подключения не выполнена'
-      if (form?.provider === 'openai-compatible') {
-        const modelName = (lastTestRequestedModel || form.model).trim()
-        setLastTestError(
-          modelName
-            ? `Модель "${modelName}" недоступна.`
-            : 'Указанная модель недоступна.',
-        )
-        return
-      }
       setLastTestError(getErrorMessage(error, fallback))
     },
   })
@@ -291,7 +281,6 @@ export function AiProviderSettingsSection() {
       return
     }
     setLastTestError(null)
-    setLastTestRequestedModel(form.model.trim())
     setPendingTestSignature(buildVerificationSignature(form))
     testMutation.mutate(buildTestPayload(form))
   }
@@ -346,6 +335,10 @@ export function AiProviderSettingsSection() {
   const isVerifiedForCurrentForm =
     lastVerifiedSignature !== null &&
     lastVerifiedSignature === buildVerificationSignature(form)
+  const testDisabledReason =
+    !isDirty && settingsQuery.data?.source === 'database'
+      ? 'Модель уже подключена'
+      : ''
   const saveDisabledReason = !isVerifiedForCurrentForm
     ? 'Сначала нажмите «Проверить подключение»'
     : ''
@@ -630,15 +623,19 @@ export function AiProviderSettingsSection() {
               <Divider className="ai-provider-actions-divider" />
 
               <Group justify="flex-end" className="ai-provider-actions">
-                <AppButton
-                  type="button"
-                  variant="default"
-                  onClick={onTestConnection}
-                  loading={testMutation.isPending}
-                  disabled={saveMutation.isPending}
-                >
-                  Проверить подключение
-                </AppButton>
+                <Tooltip label={testDisabledReason} disabled={!testDisabledReason} withArrow>
+                  <div style={{ display: 'inline-flex' }}>
+                    <AppButton
+                      type="button"
+                      variant="default"
+                      onClick={onTestConnection}
+                      loading={testMutation.isPending}
+                      disabled={saveMutation.isPending || Boolean(testDisabledReason)}
+                    >
+                      Проверить подключение
+                    </AppButton>
+                  </div>
+                </Tooltip>
                 <Tooltip label={saveDisabledReason} disabled={!saveDisabledReason} withArrow>
                   <div style={{ display: 'inline-flex' }}>
                     <AppButton

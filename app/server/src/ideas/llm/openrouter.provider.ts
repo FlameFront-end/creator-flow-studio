@@ -6,11 +6,12 @@ import {
 } from './llm-provider.interface';
 import { LlmResponseError } from './llm-response.error';
 import {
-  AI_HTTP_TIMEOUT_MS,
   fetchWithTimeout,
+  getAiHttpTimeoutMs,
   isAbortError,
   toErrorMessage,
 } from '../../common/network/fetch-with-timeout';
+import { parseOpenAiLikePayload } from './openai-like-response-parser';
 
 type OpenRouterChatCompletionResponse = {
   id?: string;
@@ -88,26 +89,27 @@ export class OpenRouterProvider implements LlmProvider {
       });
     } catch (error) {
       const message = isAbortError(error)
-        ? `OpenRouter request timed out after ${AI_HTTP_TIMEOUT_MS}ms`
+        ? `OpenRouter request timed out after ${getAiHttpTimeoutMs()}ms`
         : `OpenRouter request failed before response: ${toErrorMessage(error, 'unknown network error')}`;
       throw new LlmResponseError(message, 'provider_request_failed');
     }
 
-    const payload = (await response.json()) as OpenRouterChatCompletionResponse;
+    const { payload, rawText } =
+      await parseOpenAiLikePayload<OpenRouterChatCompletionResponse>(response);
     if (!response.ok) {
       throw new LlmResponseError(
-        payload.error?.message ?? 'OpenRouter request failed',
+        payload?.error?.message ?? 'OpenRouter request failed',
         'provider_request_failed',
-        { rawResponse: JSON.stringify(payload) },
+        { rawResponse: rawText || JSON.stringify(payload) },
       );
     }
 
-    const content = payload.choices?.[0]?.message?.content?.trim();
+    const content = payload?.choices?.[0]?.message?.content?.trim();
     if (!content) {
       throw new LlmResponseError(
         'OpenRouter response is empty or malformed',
         'empty_response',
-        { rawResponse: JSON.stringify(payload) },
+        { rawResponse: rawText || JSON.stringify(payload) },
       );
     }
 
@@ -124,8 +126,8 @@ export class OpenRouterProvider implements LlmProvider {
 
     return {
       provider: this.name,
-      model: payload.model || model,
-      tokens: payload.usage?.total_tokens ?? null,
+      model: payload?.model || model,
+      tokens: payload?.usage?.total_tokens ?? null,
       requestId: response.headers.get('x-request-id'),
       data: parsed,
     };

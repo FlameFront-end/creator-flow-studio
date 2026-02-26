@@ -167,14 +167,14 @@ export const lmStudioGuide = {
     'Скачайте модель и загрузите её в память.',
     'Откройте вкладку Local Server и запустите сервер.',
     'Скопируйте Base URL из LM Studio (обычно http://127.0.0.1:1234). Суффикс /v1 добавится автоматически.',
-    'В Creator Flow Studio откройте Настройки ИИ -> Провайдер ИИ.',
+    'В Creator Flow Studio откройте раздел «Модели AI».',
     'Выберите Local (LM Studio / OpenAI-compatible).',
     'Укажите модель и Base URL.',
     'Нажмите Проверить подключение, затем Сохранить.',
   ],
   docsUrl: 'https://lmstudio.ai/docs/local-server',
   docsLabel: 'Документация LM Studio (Local Server)',
-  appRoute: buildPromptStudioRoute('providers'),
+  appRoute: ROUTES.DASHBOARD_AI_PROVIDERS,
   appLabel: 'Открыть настройки провайдера ИИ',
 } as const
 

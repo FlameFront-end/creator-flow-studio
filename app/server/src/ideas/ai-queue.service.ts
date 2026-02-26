@@ -2,8 +2,23 @@ import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { JobsOptions, Queue } from 'bullmq';
 import { GenerateIdeasDto } from './dto/generate-ideas.dto';
-import { AI_GENERATION_QUEUE, AiJobName } from './ideas.constants';
+import {
+  AI_GENERATION_DLQ,
+  AI_GENERATION_QUEUE,
+  AiJobName,
+} from './ideas.constants';
 import { buildRedisConnection } from './redis.config';
+
+const toPositiveInteger = (
+  value: string | undefined,
+  fallback: number,
+): number => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+};
 
 export type GenerateIdeasJobData = GenerateIdeasDto & {
   count: number;
@@ -30,14 +45,41 @@ export type GenerateVideoJobData = {
   assetId: string;
 };
 
+export type AiDlqJobData = {
+  originalQueue: string;
+  originalJobId: string | null;
+  originalName: string;
+  attemptsMade: number;
+  maxAttempts: number;
+  failedAt: string;
+  errorMessage: string;
+  errorStack: string | null;
+  data: unknown;
+};
+
 @Injectable()
 export class AiQueueService implements OnModuleDestroy {
   private readonly queue = new Queue(AI_GENERATION_QUEUE, {
     connection: buildRedisConnection(),
   });
+  private readonly dlqQueue = new Queue(AI_GENERATION_DLQ, {
+    connection: buildRedisConnection(),
+  });
+  private readonly queueAttempts = toPositiveInteger(
+    process.env.QUEUE_ATTEMPTS,
+    3,
+  );
+  private readonly queueBackoffMs = toPositiveInteger(
+    process.env.QUEUE_BACKOFF_MS,
+    1500,
+  );
 
   private readonly defaultOptions: JobsOptions = {
-    attempts: 1,
+    attempts: this.queueAttempts,
+    backoff: {
+      type: 'fixed',
+      delay: this.queueBackoffMs,
+    },
     removeOnComplete: 200,
     removeOnFail: 500,
   };
@@ -50,7 +92,7 @@ export class AiQueueService implements OnModuleDestroy {
     return this.addIdempotent(
       AiJobName.GENERATE_SCRIPT,
       data,
-      `script:${data.scriptId}`,
+      this.buildJobId('script', data.scriptId),
     );
   }
 
@@ -58,7 +100,7 @@ export class AiQueueService implements OnModuleDestroy {
     return this.addIdempotent(
       AiJobName.GENERATE_CAPTION,
       data,
-      `caption:${data.captionId}`,
+      this.buildJobId('caption', data.captionId),
     );
   }
 
@@ -66,7 +108,7 @@ export class AiQueueService implements OnModuleDestroy {
     return this.addIdempotent(
       AiJobName.GENERATE_IMAGE,
       data,
-      `image:${data.assetId}`,
+      this.buildJobId('image', data.assetId),
     );
   }
 
@@ -74,12 +116,19 @@ export class AiQueueService implements OnModuleDestroy {
     return this.addIdempotent(
       AiJobName.GENERATE_VIDEO,
       data,
-      `video:${data.assetId}`,
+      this.buildJobId('video', data.assetId),
     );
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.queue.close();
+    await Promise.all([this.queue.close(), this.dlqQueue.close()]);
+  }
+
+  enqueueDlqJob(data: AiDlqJobData) {
+    return this.dlqQueue.add('failed-job', data, {
+      removeOnComplete: 1000,
+      removeOnFail: 1000,
+    });
   }
 
   private async addIdempotent<T>(
@@ -113,5 +162,9 @@ export class AiQueueService implements OnModuleDestroy {
       message.includes('job') &&
       (message.includes('exists') || message.includes('duplicate'))
     );
+  }
+
+  private buildJobId(prefix: string, id: string): string {
+    return `${prefix}-${id}`;
   }
 }

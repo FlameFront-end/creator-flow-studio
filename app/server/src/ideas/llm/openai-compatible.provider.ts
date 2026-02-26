@@ -10,8 +10,8 @@ import {
 } from './llm-provider.interface';
 import { LlmResponseError } from './llm-response.error';
 import {
-  AI_HTTP_TIMEOUT_MS,
   fetchWithTimeout,
+  getAiHttpTimeoutMs,
   isAbortError,
   toErrorMessage,
 } from '../../common/network/fetch-with-timeout';
@@ -308,7 +308,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
       });
     } catch (error) {
       const message = isAbortError(error)
-        ? `OpenAI-compatible request timed out after ${AI_HTTP_TIMEOUT_MS}ms`
+        ? `OpenAI-compatible request timed out after ${getAiHttpTimeoutMs()}ms`
         : `OpenAI-compatible request failed before response: ${toErrorMessage(error, 'unknown network error')}`;
       throw new LlmResponseError(message, 'provider_request_failed');
     }

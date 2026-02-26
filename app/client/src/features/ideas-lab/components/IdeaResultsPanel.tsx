@@ -1,4 +1,4 @@
-import { Card, Group, Image, Paper, Stack, Text, Title } from '@ui/core'
+import { Card, Group, Image, Loader, Paper, Stack, Text, Title } from '@ui/core'
 
 import { AppInlineErrorAlert } from '../../../shared/components/AppInlineErrorAlert'
 import { AppBadge } from '../../../shared/components/AppBadge'
@@ -39,6 +39,8 @@ const pickDisplayCaption = (captions: Caption[]): Caption | null => {
 }
 
 const isSucceededStatus = (status: string | null | undefined) => status === 'succeeded'
+const isInProgressStatus = (status: string | null | undefined) =>
+  status === 'queued' || status === 'running'
 const INLINE_ERROR_PREVIEW_LIMIT = 180
 
 export const IdeaResultsPanel = ({
@@ -63,6 +65,40 @@ export const IdeaResultsPanel = ({
     () => pickDisplayCaption(detailsQuery.data?.captions ?? []),
     [detailsQuery.data?.captions],
   )
+
+  const scriptRequestPending =
+    controller.generateScriptMutation.isPending &&
+    controller.generateScriptMutation.variables?.ideaId === selectedIdea?.id
+  const captionRequestPending =
+    controller.generateCaptionMutation.isPending &&
+    controller.generateCaptionMutation.variables?.ideaId === selectedIdea?.id
+  const imagePromptPending =
+    controller.generateImagePromptMutation.isPending &&
+    controller.generateImagePromptMutation.variables === selectedIdea?.id
+  const videoPromptPending =
+    controller.generateVideoPromptMutation.isPending &&
+    controller.generateVideoPromptMutation.variables === selectedIdea?.id
+  const imagePromptError =
+    controller.generateImagePromptMutation.isError &&
+    controller.generateImagePromptMutation.variables === selectedIdea?.id
+      ? getErrorMessage(
+          controller.generateImagePromptMutation.error,
+          'Не удалось сгенерировать промпт изображения',
+        )
+      : null
+  const videoPromptError =
+    controller.generateVideoPromptMutation.isError &&
+    controller.generateVideoPromptMutation.variables === selectedIdea?.id
+      ? getErrorMessage(
+          controller.generateVideoPromptMutation.error,
+          'Не удалось сгенерировать промпт видео',
+        )
+      : null
+
+  const scriptGenerating =
+    scriptRequestPending || isInProgressStatus(displayedScript?.status)
+  const captionGenerating =
+    captionRequestPending || isInProgressStatus(displayedCaption?.status)
 
   useEffect(() => {
     setExpandedScriptError(false)
@@ -131,7 +167,13 @@ export const IdeaResultsPanel = ({
             <div className="ideas-results-text-grid">
               <div className="ideas-results-section">
                 <Title order={5} className="ideas-results-section-title">Сценарий</Title>
-                {!displayedScript ? (
+                {scriptGenerating ? (
+                  <Card withBorder radius="md" p="md" className="ideas-results-card">
+                    <Group justify="center" py="xl">
+                      <Loader size={25} />
+                    </Group>
+                  </Card>
+                ) : !displayedScript ? (
                   <Text c="dimmed" className="ideas-results-empty-text">Сценарий еще не сгенерирован</Text>
                 ) : (
                   <Card withBorder radius="md" p="md" className="ideas-results-card">
@@ -161,7 +203,7 @@ export const IdeaResultsPanel = ({
                           ))}
                         </Stack>
                       ) : null}
-                      {displayedScript.error ? (
+                      {displayedScript?.error ? (
                         <AppInlineErrorAlert>
                           <Text
                             size="sm"
@@ -199,7 +241,13 @@ export const IdeaResultsPanel = ({
 
               <div className="ideas-results-section">
                 <Title order={5} className="ideas-results-section-title">Подпись</Title>
-                {!displayedCaption ? (
+                {captionGenerating ? (
+                  <Card withBorder radius="md" p="md" className="ideas-results-card">
+                    <Group justify="center" py="xl">
+                      <Loader size={25} />
+                    </Group>
+                  </Card>
+                ) : !displayedCaption ? (
                   <Text c="dimmed" className="ideas-results-empty-text">Подпись еще не сгенерирована</Text>
                 ) : (
                   <Card withBorder radius="md" p="md" className="ideas-results-card">
@@ -220,7 +268,7 @@ export const IdeaResultsPanel = ({
                       <Text size="sm" c="dimmed">
                         {displayedCaption.hashtags?.join(' ') || 'Без хэштегов'}
                       </Text>
-                      {displayedCaption.error ? (
+                      {displayedCaption?.error ? (
                         <AppInlineErrorAlert>
                           <Text
                             size="sm"
@@ -258,22 +306,48 @@ export const IdeaResultsPanel = ({
             </div>
 
             <div className="ideas-results-text-grid">
-              <div className="ideas-results-section">
-                <Title order={5} className="ideas-results-section-title">Промпт изображения</Title>
-                <Card withBorder radius="md" p="md" className="ideas-results-card">
-                  <Text size="sm" c={selectedIdea.imagePrompt ? undefined : 'dimmed'}>
-                    {selectedIdea.imagePrompt ?? 'Промпт изображения еще не сгенерирован'}
-                  </Text>
-                </Card>
-              </div>
-              <div className="ideas-results-section">
-                <Title order={5} className="ideas-results-section-title">Промпт видео</Title>
-                <Card withBorder radius="md" p="md" className="ideas-results-card">
-                  <Text size="sm" c={selectedIdea.videoPrompt ? undefined : 'dimmed'}>
-                    {selectedIdea.videoPrompt ?? 'Промпт видео еще не сгенерирован'}
-                  </Text>
-                </Card>
-              </div>
+                <div className="ideas-results-section">
+                  <Title order={5} className="ideas-results-section-title">Промпт изображения</Title>
+                  <Card withBorder radius="md" p="md" className="ideas-results-card">
+                    {imagePromptPending ? (
+                      <Group justify="center" py="xl">
+                        <Loader size={25} />
+                      </Group>
+                    ) : (
+                      <Text size="sm" c={selectedIdea.imagePrompt ? undefined : 'dimmed'}>
+                        {selectedIdea.imagePrompt ?? 'Промпт изображения еще не сгенерирован'}
+                      </Text>
+                    )}
+                  </Card>
+                  {imagePromptError ? (
+                    <AppInlineErrorAlert>
+                      <Text size="sm" lineClamp={3}>
+                        {imagePromptError}
+                      </Text>
+                    </AppInlineErrorAlert>
+                  ) : null}
+                </div>
+                <div className="ideas-results-section">
+                  <Title order={5} className="ideas-results-section-title">Промпт видео</Title>
+                  <Card withBorder radius="md" p="md" className="ideas-results-card">
+                    {videoPromptPending ? (
+                      <Group justify="center" py="xl">
+                        <Loader size={25} />
+                      </Group>
+                    ) : (
+                      <Text size="sm" c={selectedIdea.videoPrompt ? undefined : 'dimmed'}>
+                        {selectedIdea.videoPrompt ?? 'Промпт видео еще не сгенерирован'}
+                      </Text>
+                    )}
+                  </Card>
+                  {videoPromptError ? (
+                    <AppInlineErrorAlert>
+                      <Text size="sm" lineClamp={3}>
+                        {videoPromptError}
+                      </Text>
+                    </AppInlineErrorAlert>
+                  ) : null}
+                </div>
             </div>
 
             <Title order={5} className="ideas-results-section-title">Ассеты</Title>

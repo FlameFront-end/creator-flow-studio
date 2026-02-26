@@ -267,10 +267,11 @@ type TooltipProps = {
   withArrow?: boolean
   side?: 'top' | 'right' | 'bottom' | 'left'
   align?: 'start' | 'center' | 'end'
+  sideOffset?: number
   children: ReactNode
 }
 
-export function Tooltip({ label, disabled, withArrow, side, align, children }: TooltipProps) {
+export function Tooltip({ label, disabled, withArrow, side, align, sideOffset = 6, children }: TooltipProps) {
   if (!label || disabled) {
     return <>{children}</>
   }
@@ -284,7 +285,7 @@ export function Tooltip({ label, disabled, withArrow, side, align, children }: T
         <TooltipContent
           side={side}
           align={align}
-          sideOffset={6}
+          sideOffset={sideOffset}
           className="max-w-[320px]"
           data-arrow={withArrow ? 'true' : undefined}
         >

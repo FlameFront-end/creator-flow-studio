@@ -4,6 +4,7 @@ export const ROUTES = {
   DASHBOARD_PROJECTS: '/dashboard/projects',
   DASHBOARD_PROMPT_STUDIO: '/dashboard/prompt-studio',
   DASHBOARD_PROMPT_STUDIO_WORKSPACE: '/dashboard/prompt-studio/:workspace',
+  DASHBOARD_AI_PROVIDERS: '/dashboard/ai-providers',
   DASHBOARD_IDEAS_LAB: '/dashboard/ideas-lab',
   DASHBOARD_IDEAS_LAB_WORKSPACE: '/dashboard/ideas-lab/:workspace',
   ABOUT: '/about',
@@ -23,6 +24,7 @@ export const DASHBOARD_CHILD_PATHS = {
   PROJECTS: 'projects',
   PROMPT_STUDIO: 'prompt-studio',
   PROMPT_STUDIO_WORKSPACE: 'prompt-studio/:workspace',
+  AI_PROVIDERS: 'ai-providers',
   IDEAS_LAB: 'ideas-lab',
   IDEAS_LAB_WORKSPACE: 'ideas-lab/:workspace',
 } as const
@@ -30,10 +32,10 @@ export const DASHBOARD_CHILD_PATHS = {
 export const buildPostDraftExportRoute = (id: string) =>
   `/post-drafts/${id}/export`
 
-export type DashboardView = 'projects' | 'prompt-studio' | 'ideas-lab'
+export type DashboardView = 'projects' | 'prompt-studio' | 'ai-providers' | 'ideas-lab'
 
 export const isDashboardView = (value: string | null | undefined): value is DashboardView =>
-  value === 'projects' || value === 'prompt-studio' || value === 'ideas-lab'
+  value === 'projects' || value === 'prompt-studio' || value === 'ai-providers' || value === 'ideas-lab'
 
 export type IdeasLabWorkspaceRoute = 'brief' | 'ideas' | 'logs'
 
@@ -45,7 +47,7 @@ export const isIdeasLabWorkspaceRoute = (
 export const buildIdeasLabRoute = (workspace: IdeasLabWorkspaceRoute) =>
   `/dashboard/ideas-lab/${workspace}`
 
-export type PromptStudioWorkspaceRoute = 'personas' | 'rules' | 'templates' | 'preview' | 'providers'
+export type PromptStudioWorkspaceRoute = 'personas' | 'rules' | 'templates' | 'preview'
 
 export const buildPromptStudioRoute = (workspace: PromptStudioWorkspaceRoute) =>
   `/dashboard/prompt-studio/${workspace}`

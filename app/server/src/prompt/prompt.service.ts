@@ -5,12 +5,38 @@ import {
   PolicyRuleType,
 } from '../policy-rules/entities/policy-rule.entity';
 import { PolicyRulesService } from '../policy-rules/policy-rules.service';
+import {
+  PromptTemplate,
+  PromptTemplateKey,
+} from '../prompt-templates/entities/prompt-template.entity';
 import { PromptTemplatesService } from '../prompt-templates/prompt-templates.service';
 import { PersonasService } from '../personas/personas.service';
 import { PromptPreviewDto } from './dto/prompt-preview.dto';
 
+type CacheEntry<T> = {
+  value: T;
+  expiresAtMs: number;
+};
+
 @Injectable()
 export class PromptService {
+  private readonly cacheTtlMs =
+    this.toPositiveInt(process.env.PROMPT_CACHE_TTL_SECONDS, 30) * 1000;
+  private readonly policyRulesCache = new Map<
+    string,
+    CacheEntry<
+      {
+        type: PolicyRuleType;
+        severity: PolicyRuleSeverity;
+        text: string;
+      }[]
+    >
+  >();
+  private readonly templateCache = new Map<
+    string,
+    CacheEntry<PromptTemplate>
+  >();
+
   constructor(
     private readonly aiSettingsService: AiSettingsService,
     private readonly personasService: PersonasService,
@@ -22,8 +48,8 @@ export class PromptService {
     const [runtimeConfig, persona, rules, template] = await Promise.all([
       this.aiSettingsService.getRuntimeConfig(),
       this.personasService.findOne(dto.personaId),
-      this.policyRulesService.findAll(),
-      this.promptTemplatesService.findByKey(dto.templateKey),
+      this.getPolicyRulesCached(dto.personaId),
+      this.getTemplateCached(dto.templateKey, dto.personaId),
     ]);
 
     const renderedTemplate = this.interpolateTemplate(
@@ -85,5 +111,60 @@ export class PromptService {
     }
 
     return `${header}\n${matched.join('\n')}`;
+  }
+
+  private async getPolicyRulesCached(personaId: string): Promise<
+    {
+      type: PolicyRuleType;
+      severity: PolicyRuleSeverity;
+      text: string;
+    }[]
+  > {
+    const nowMs = Date.now();
+    const cacheKey = personaId;
+    const cached = this.policyRulesCache.get(cacheKey);
+    if (cached && cached.expiresAtMs > nowMs) {
+      return cached.value;
+    }
+
+    const rules = await this.policyRulesService.findAll({
+      personaId,
+      includeGlobal: true,
+    });
+    this.policyRulesCache.set(cacheKey, {
+      value: rules,
+      expiresAtMs: nowMs + this.cacheTtlMs,
+    });
+    return rules;
+  }
+
+  private async getTemplateCached(
+    key: PromptTemplateKey,
+    personaId: string,
+  ): Promise<PromptTemplate> {
+    const nowMs = Date.now();
+    const cacheKey = `${personaId}:${key}`;
+    const cached = this.templateCache.get(cacheKey);
+    if (cached && cached.expiresAtMs > nowMs) {
+      return cached.value;
+    }
+
+    const template = await this.promptTemplatesService.findByKey(
+      key,
+      personaId,
+    );
+    this.templateCache.set(cacheKey, {
+      value: template,
+      expiresAtMs: nowMs + this.cacheTtlMs,
+    });
+    return template;
+  }
+
+  private toPositiveInt(value: string | undefined, fallback: number): number {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return fallback;
+    }
+    return parsed;
   }
 }

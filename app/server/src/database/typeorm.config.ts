@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+import { config as loadEnv } from 'dotenv';
 import { DataSource, DataSourceOptions } from 'typeorm';
 import { PolicyRule } from '../policy-rules/entities/policy-rule.entity';
 import { PromptTemplate } from '../prompt-templates/entities/prompt-template.entity';
@@ -23,6 +25,12 @@ import { Step9AiResponseLanguage1730018000000 } from './migrations/1730018000000
 import { Step10UniqueProjectPersonaNames1730019000000 } from './migrations/1730019000000-step10-unique-project-persona-names';
 import { User } from '../auth/entities/user.entity';
 import { Step11UsersAuth1730020000000 } from './migrations/1730020000000-step11-users-auth';
+import { Step12IdeasListPerformanceIndexes1730021000000 } from './migrations/1730021000000-step12-ideas-list-performance-indexes';
+import { Step13PromptStudioContextScoping1730022000000 } from './migrations/1730022000000-step13-prompt-studio-context-scoping';
+
+loadEnv({
+  path: resolve(__dirname, '../../.env'),
+});
 
 const toNumber = (value: string | undefined, fallback: number): number => {
   const parsed = Number(value);
@@ -63,9 +71,11 @@ export const buildTypeOrmOptions = (): DataSourceOptions => ({
     Step9AiResponseLanguage1730018000000,
     Step10UniqueProjectPersonaNames1730019000000,
     Step11UsersAuth1730020000000,
+    Step12IdeasListPerformanceIndexes1730021000000,
+    Step13PromptStudioContextScoping1730022000000,
   ],
   synchronize: false,
-  migrationsRun: true,
+  migrationsRun: false,
 });
 
 export const appDataSource = new DataSource(buildTypeOrmOptions());

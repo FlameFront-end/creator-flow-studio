@@ -5,6 +5,7 @@ export type PolicyRuleSeverity = 'hard' | 'soft'
 
 export type PolicyRule = {
   id: string
+  personaId: string | null
   type: PolicyRuleType
   text: string
   severity: PolicyRuleSeverity
@@ -12,6 +13,7 @@ export type PolicyRule = {
 }
 
 export type CreatePolicyRuleRequest = {
+  personaId?: string
   type: PolicyRuleType
   text: string
   severity: PolicyRuleSeverity
@@ -20,8 +22,13 @@ export type CreatePolicyRuleRequest = {
 export type UpdatePolicyRuleRequest = Partial<CreatePolicyRuleRequest>
 
 export const policyRulesApi = {
-  async getPolicyRules(): Promise<PolicyRule[]> {
-    const { data } = await axiosInstance.get<PolicyRule[]>('/policy-rules')
+  async getPolicyRules(params?: {
+    personaId?: string
+    includeGlobal?: boolean
+  }): Promise<PolicyRule[]> {
+    const { data } = await axiosInstance.get<PolicyRule[]>('/policy-rules', {
+      params,
+    })
     return data
   },
   async createPolicyRule(payload: CreatePolicyRuleRequest): Promise<PolicyRule> {

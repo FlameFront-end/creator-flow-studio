@@ -51,7 +51,10 @@ export const IdeasGenerationPanel = ({
           <Select
             label="Проект"
             value={controller.projectId}
-            onChange={controller.setProjectId}
+            onChange={(value) => {
+              controller.setProjectId(value)
+              controller.setPersonaId(null)
+            }}
             data={(controller.projectsQuery.data ?? []).map((project) => ({
               value: project.id,
               label: project.name,
@@ -68,7 +71,9 @@ export const IdeasGenerationPanel = ({
               label: persona.name,
             }))}
             searchable
-            placeholder="Выберите персонажа"
+            placeholder={controller.projectId ? 'Выберите персонажа' : 'Сначала выберите проект'}
+            disabled={!controller.projectId}
+            nothingFoundMessage={controller.projectId ? 'Для проекта нет персонажей' : 'Сначала выберите проект'}
           />
           <Select
             label="Формат"
