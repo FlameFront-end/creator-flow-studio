@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class Step8AiRunLogErrorDetails1730017000000
-  implements MigrationInterface
-{
+export class Step8AiRunLogErrorDetails1730017000000 implements MigrationInterface {
   name = 'Step8AiRunLogErrorDetails1730017000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -27,4 +25,3 @@ export class Step8AiRunLogErrorDetails1730017000000
     `);
   }
 }
-

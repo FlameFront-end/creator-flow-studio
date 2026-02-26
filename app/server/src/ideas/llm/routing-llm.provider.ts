@@ -34,9 +34,7 @@ export class RoutingLlmProvider implements LlmProvider {
       case 'openrouter':
         return this.openRouterProvider.generateJson<T>(requestWithConfig);
       case 'openai-compatible':
-        return this.openAiCompatibleProvider.generateJson<T>(
-          requestWithConfig,
-        );
+        return this.openAiCompatibleProvider.generateJson<T>(requestWithConfig);
       default:
         return this.openAiProvider.generateJson<T>(requestWithConfig);
     }

@@ -1,10 +1,20 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import {
   LlmJsonRequest,
   LlmJsonResponse,
   LlmProvider,
 } from './llm-provider.interface';
 import { LlmResponseError } from './llm-response.error';
+import {
+  AI_HTTP_TIMEOUT_MS,
+  fetchWithTimeout,
+  isAbortError,
+  toErrorMessage,
+} from '../../common/network/fetch-with-timeout';
 
 type OpenAiCompatibleChatCompletionResponse = {
   id?: string;
@@ -42,13 +52,17 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     responseSchema,
   }: LlmJsonRequest): Promise<LlmJsonResponse<T>> {
     const apiKey =
-      config?.provider === this.name ? config.apiKey : process.env.LLM_API_KEY ?? '';
+      config?.provider === this.name
+        ? config.apiKey
+        : (process.env.LLM_API_KEY ?? '');
     const model =
-      config?.provider === this.name ? config.model : process.env.LLM_MODEL ?? '';
+      config?.provider === this.name
+        ? config.model
+        : (process.env.LLM_MODEL ?? '');
     const baseUrl =
       config?.provider === this.name
-        ? config.baseUrl ?? ''
-        : process.env.LLM_BASE_URL ?? '';
+        ? (config.baseUrl ?? '')
+        : (process.env.LLM_BASE_URL ?? '');
 
     if (!apiKey) {
       this.logger.debug(
@@ -285,17 +299,27 @@ export class OpenAiCompatibleProvider implements LlmProvider {
       headers.Authorization = `Bearer ${args.apiKey}`;
     }
 
-    const response = await fetch(args.endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody),
-    });
+    let response: Response;
+    try {
+      response = await fetchWithTimeout(args.endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+      });
+    } catch (error) {
+      const message = isAbortError(error)
+        ? `OpenAI-compatible request timed out after ${AI_HTTP_TIMEOUT_MS}ms`
+        : `OpenAI-compatible request failed before response: ${toErrorMessage(error, 'unknown network error')}`;
+      throw new LlmResponseError(message, 'provider_request_failed');
+    }
 
     const { payload, rawText } = await this.parsePayload(response);
     return { response, payload: payload ?? {}, rawText };
   }
 
-  private async parsePayload(response: Response): Promise<ParsedProviderPayload> {
+  private async parsePayload(
+    response: Response,
+  ): Promise<ParsedProviderPayload> {
     const rawText = await response.text();
     if (!rawText.trim()) {
       return { payload: null, rawText };
@@ -338,4 +362,3 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     return null;
   }
 }
-

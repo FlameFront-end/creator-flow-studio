@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import { CreatePromptTemplateDto } from './dto/create-prompt-template.dto';
@@ -30,7 +34,9 @@ export class PromptTemplatesService {
   }
 
   async findOne(id: string): Promise<PromptTemplate> {
-    const promptTemplate = await this.promptTemplatesRepository.findOneBy({ id });
+    const promptTemplate = await this.promptTemplatesRepository.findOneBy({
+      id,
+    });
     if (!promptTemplate) {
       throw new NotFoundException('Prompt template not found');
     }
@@ -38,14 +44,19 @@ export class PromptTemplatesService {
   }
 
   async findByKey(key: PromptTemplate['key']): Promise<PromptTemplate> {
-    const promptTemplate = await this.promptTemplatesRepository.findOneBy({ key });
+    const promptTemplate = await this.promptTemplatesRepository.findOneBy({
+      key,
+    });
     if (!promptTemplate) {
       throw new NotFoundException(`Prompt template "${key}" not found`);
     }
     return promptTemplate;
   }
 
-  async update(id: string, dto: UpdatePromptTemplateDto): Promise<PromptTemplate> {
+  async update(
+    id: string,
+    dto: UpdatePromptTemplateDto,
+  ): Promise<PromptTemplate> {
     const promptTemplate = await this.findOne(id);
     if (dto.key !== undefined) {
       promptTemplate.key = dto.key;

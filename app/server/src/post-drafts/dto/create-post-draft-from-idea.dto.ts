@@ -23,4 +23,3 @@ export class CreatePostDraftFromIdeaDto {
   @IsDate()
   scheduledAt?: Date;
 }
-

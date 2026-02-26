@@ -34,4 +34,3 @@ export class Script {
   @ManyToOne(() => Idea, (idea) => idea.scripts, { onDelete: 'CASCADE' })
   idea!: Idea;
 }
-

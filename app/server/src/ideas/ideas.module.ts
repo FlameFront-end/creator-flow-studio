@@ -27,6 +27,8 @@ import { OpenAiCompatibleProvider } from './llm/openai-compatible.provider';
 import { OpenAiProvider } from './llm/openai.provider';
 import { OpenRouterProvider } from './llm/openrouter.provider';
 import { RoutingLlmProvider } from './llm/routing-llm.provider';
+import { IdeasPromptGenerationService } from './ideas-prompt-generation.service';
+import { IdeasWorkerResponseNormalizerService } from './ideas-worker-response-normalizer.service';
 import { IdeasService } from './ideas.service';
 import { IdeasWorkerRunner } from './ideas.worker-runner';
 
@@ -48,6 +50,8 @@ import { IdeasWorkerRunner } from './ideas.worker-runner';
   providers: [
     AiQueueService,
     IdeasService,
+    IdeasPromptGenerationService,
+    IdeasWorkerResponseNormalizerService,
     IdeasWorkerRunner,
     OpenAiProvider,
     OpenRouterProvider,

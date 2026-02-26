@@ -1,10 +1,16 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { AiRunLog } from '../ideas/entities/ai-run-log.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { Project } from './entities/project.entity';
+
+const PROJECT_NAME_UNIQUE_INDEX = 'UQ_projects_name_ci';
 
 @Injectable()
 export class ProjectsService {
@@ -24,7 +30,7 @@ export class ProjectsService {
       description: dto.description?.trim() || null,
     });
 
-    return this.projectsRepository.save(project);
+    return this.saveWithConflictHandling(project);
   }
 
   async findAll(): Promise<Project[]> {
@@ -56,7 +62,7 @@ export class ProjectsService {
       project.description = dto.description.trim() || null;
     }
 
-    return this.projectsRepository.save(project);
+    return this.saveWithConflictHandling(project);
   }
 
   async remove(id: string): Promise<void> {
@@ -65,7 +71,10 @@ export class ProjectsService {
     await this.projectsRepository.remove(project);
   }
 
-  private async ensureUniqueName(name: string, excludeId?: string): Promise<void> {
+  private async ensureUniqueName(
+    name: string,
+    excludeId?: string,
+  ): Promise<void> {
     const query = this.projectsRepository
       .createQueryBuilder('project')
       .where('LOWER(project.name) = LOWER(:name)', { name });
@@ -78,5 +87,31 @@ export class ProjectsService {
     if (duplicateExists) {
       throw new ConflictException('Project name must be unique');
     }
+  }
+
+  private async saveWithConflictHandling(project: Project): Promise<Project> {
+    try {
+      return await this.projectsRepository.save(project);
+    } catch (error) {
+      if (this.isProjectNameUniqueViolation(error)) {
+        throw new ConflictException('Project name must be unique');
+      }
+      throw error;
+    }
+  }
+
+  private isProjectNameUniqueViolation(error: unknown): boolean {
+    if (!(error instanceof QueryFailedError)) {
+      return false;
+    }
+
+    const queryError = error as QueryFailedError & {
+      code?: string;
+      constraint?: string;
+    };
+    return (
+      queryError.code === '23505' &&
+      queryError.constraint === PROJECT_NAME_UNIQUE_INDEX
+    );
   }
 }

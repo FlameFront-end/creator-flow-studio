@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class Step5ApprovalAndExport1730014000000
-  implements MigrationInterface
-{
+export class Step5ApprovalAndExport1730014000000 implements MigrationInterface {
   name = 'Step5ApprovalAndExport1730014000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -53,4 +51,3 @@ export class Step5ApprovalAndExport1730014000000
     await queryRunner.query(`DROP TABLE IF EXISTS "post_drafts"`);
   }
 }
-

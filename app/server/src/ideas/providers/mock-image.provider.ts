@@ -5,7 +5,10 @@ import { GeneratedImage, ImageProvider } from './image-provider.interface';
 export class MockImageProvider implements ImageProvider {
   readonly name = 'mock-image-provider';
 
-  async generate(params: { prompt: string; ideaId: string }): Promise<GeneratedImage> {
+  generate(params: {
+    prompt: string;
+    ideaId: string;
+  }): Promise<GeneratedImage> {
     const width = 1080;
     const height = 1920;
     const safePrompt = this.escapeXml(params.prompt).slice(0, 220);
@@ -30,12 +33,12 @@ export class MockImageProvider implements ImageProvider {
   </foreignObject>
 </svg>`;
 
-    return {
+    return Promise.resolve({
       bytes: Buffer.from(svg, 'utf8'),
       mime: 'image/svg+xml',
       width,
       height,
-    };
+    });
   }
 
   private escapeXml(value: string): string {

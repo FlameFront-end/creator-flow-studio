@@ -17,7 +17,9 @@ import { PromptTemplatesService } from './prompt-templates.service';
 
 @Controller('prompt-templates')
 export class PromptTemplatesController {
-  constructor(private readonly promptTemplatesService: PromptTemplatesService) {}
+  constructor(
+    private readonly promptTemplatesService: PromptTemplatesService,
+  ) {}
 
   @Post()
   create(@Body() dto: CreatePromptTemplateDto): Promise<PromptTemplate> {

@@ -50,4 +50,3 @@ export class ModerationCheck {
   })
   postDraft!: PostDraft;
 }
-

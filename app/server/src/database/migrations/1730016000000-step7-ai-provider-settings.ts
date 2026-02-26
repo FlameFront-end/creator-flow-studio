@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class Step7AiProviderSettings1730016000000
-  implements MigrationInterface
-{
+export class Step7AiProviderSettings1730016000000 implements MigrationInterface {
   name = 'Step7AiProviderSettings1730016000000';
 
   async up(queryRunner: QueryRunner): Promise<void> {

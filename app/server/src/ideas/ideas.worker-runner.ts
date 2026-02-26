@@ -18,28 +18,23 @@ import { AiOperation, AiRunLog } from './entities/ai-run-log.entity';
 import { Asset } from './entities/asset.entity';
 import { Caption } from './entities/caption.entity';
 import { GenerationStatus } from './entities/generation-status.enum';
-import { Idea, IdeaFormat } from './entities/idea.entity';
+import { Idea } from './entities/idea.entity';
 import { Script } from './entities/script.entity';
 import {
   AI_GENERATION_QUEUE,
-  AiJobName,
-  DEFAULT_MAX_HASHTAGS,
   DEFAULT_MAX_SCRIPT_CHARS,
-  DEFAULT_MAX_SHOTS,
 } from './ideas.constants';
-import {
-  LLM_PROVIDER_TOKEN,
-} from './llm/llm-provider.interface';
+import { LLM_PROVIDER_TOKEN } from './llm/llm-provider.interface';
 import type { LlmProvider } from './llm/llm-provider.interface';
 import { LlmResponseError } from './llm/llm-response.error';
 import { buildRedisConnection } from './redis.config';
 import {
-  IMAGE_PROVIDER_TOKEN,
-} from './providers/image-provider.interface';
+  normalizeAiRunLogError,
+  normalizeAiRunLogRawResponse,
+} from './ai-run-log-normalizer';
+import { IMAGE_PROVIDER_TOKEN } from './providers/image-provider.interface';
 import type { ImageProvider } from './providers/image-provider.interface';
-import {
-  VIDEO_PROVIDER_TOKEN,
-} from './providers/video-provider.interface';
+import { VIDEO_PROVIDER_TOKEN } from './providers/video-provider.interface';
 import type { VideoProvider } from './providers/video-provider.interface';
 import { LocalObjectStorageService } from '../storage/local-object-storage.service';
 import {
@@ -47,41 +42,12 @@ import {
   buildMockIdeas,
   buildMockScript,
 } from './mock/ai-test-fallback';
-
-type IdeasResponse = {
-  ideas?: Array<{
-    topic?: unknown;
-    title?: unknown;
-    hook?: unknown;
-    description?: unknown;
-    format?: unknown;
-    type?: unknown;
-  }>;
-};
-
-type ScriptResponse = {
-  text?: unknown;
-  script?: unknown;
-  shotList?: unknown;
-  content?: unknown;
-  output?: unknown;
-  result?: unknown;
-  message?: unknown;
-  shots?: unknown;
-  scenes?: unknown;
-  steps?: unknown;
-  reel?: unknown;
-  storyboard?: unknown;
-  reel_title?: unknown;
-  duration?: unknown;
-  theme?: unknown;
-  structure?: unknown;
-};
-
-type CaptionResponse = {
-  text?: unknown;
-  hashtags?: unknown;
-};
+import {
+  CaptionResponse,
+  IdeasResponse,
+  IdeasWorkerResponseNormalizerService,
+  ScriptResponse,
+} from './ideas-worker-response-normalizer.service';
 
 @Injectable()
 export class IdeasWorkerRunner implements OnModuleDestroy {
@@ -105,6 +71,7 @@ export class IdeasWorkerRunner implements OnModuleDestroy {
     private readonly videoProvider: VideoProvider,
     private readonly objectStorageService: LocalObjectStorageService,
     private readonly promptService: PromptService,
+    private readonly responseNormalizer: IdeasWorkerResponseNormalizerService,
     @InjectRepository(Idea)
     private readonly ideasRepository: Repository<Idea>,
     @InjectRepository(Script)
@@ -126,19 +93,21 @@ export class IdeasWorkerRunner implements OnModuleDestroy {
       AI_GENERATION_QUEUE,
       async (job: Job) => {
         switch (job.name) {
-          case AiJobName.GENERATE_IDEAS:
+          case 'generate-ideas':
             await this.handleGenerateIdeas(job as Job<GenerateIdeasJobData>);
             return;
-          case AiJobName.GENERATE_SCRIPT:
+          case 'generate-script':
             await this.handleGenerateScript(job as Job<GenerateScriptJobData>);
             return;
-          case AiJobName.GENERATE_CAPTION:
-            await this.handleGenerateCaption(job as Job<GenerateCaptionJobData>);
+          case 'generate-caption':
+            await this.handleGenerateCaption(
+              job as Job<GenerateCaptionJobData>,
+            );
             return;
-          case AiJobName.GENERATE_IMAGE:
+          case 'generate-image':
             await this.handleGenerateImage(job as Job<GenerateImageJobData>);
             return;
-          case AiJobName.GENERATE_VIDEO:
+          case 'generate-video':
             await this.handleGenerateVideo(job as Job<GenerateVideoJobData>);
             return;
           default:
@@ -205,10 +174,13 @@ If unavailable, return {"ideas": []}.
         config: runtimeConfig,
       });
 
-      const ideas = this.normalizeIdeas(response.data, job.data.format);
+      const ideas = this.responseNormalizer.normalizeIdeas(
+        response.data,
+        job.data.format,
+      );
       if (!ideas.length) {
         throw new Error(
-          `LLM returned an empty ideas list. Response preview: ${this.previewUnknown(response.data)}`,
+          `LLM returned an empty ideas list. Response preview: ${this.responseNormalizer.previewUnknown(response.data)}`,
         );
       }
 
@@ -365,8 +337,11 @@ Do not return formats like reel_title/structure/reel_concept.
         },
       });
 
-      const scriptText = this.normalizeScriptText(response.data);
-      const shotList = this.normalizeShotList(response.data);
+      const scriptText = this.responseNormalizer.normalizeScriptText(
+        response.data,
+        this.maxScriptChars,
+      );
+      const shotList = this.responseNormalizer.normalizeShotList(response.data);
 
       await this.scriptsRepository.update(script.id, {
         text: scriptText,
@@ -508,8 +483,8 @@ STRICT OUTPUT CONTRACT:
         },
       });
 
-      const text = this.normalizeCaptionText(response.data);
-      const hashtags = this.normalizeHashtags(response.data);
+      const text = this.responseNormalizer.normalizeCaptionText(response.data);
+      const hashtags = this.responseNormalizer.normalizeHashtags(response.data);
 
       await this.captionsRepository.update(caption.id, {
         text,
@@ -578,6 +553,7 @@ STRICT OUTPUT CONTRACT:
 
   private async handleGenerateImage(job: Job<GenerateImageJobData>) {
     const startedAt = Date.now();
+    let savedAssetUrl: string | null = null;
     const asset = await this.assetsRepository.findOne({
       where: { id: job.data.assetId },
     });
@@ -606,22 +582,28 @@ STRICT OUTPUT CONTRACT:
         prompt: idea.imagePrompt,
         ideaId: idea.id,
       });
-      const url = await this.objectStorageService.save({
+      savedAssetUrl = await this.objectStorageService.save({
         bytes: generated.bytes,
         mime: generated.mime,
         ideaId: idea.id,
       });
 
-      await this.assetsRepository.update(asset.id, {
-        status: GenerationStatus.SUCCEEDED,
-        error: null,
-        provider: this.imageProvider.name,
-        mime: generated.mime,
-        width: generated.width,
-        height: generated.height,
-        url,
-        sourcePrompt: idea.imagePrompt,
-      });
+      try {
+        await this.assetsRepository.update(asset.id, {
+          status: GenerationStatus.SUCCEEDED,
+          error: null,
+          provider: this.imageProvider.name,
+          mime: generated.mime,
+          width: generated.width,
+          height: generated.height,
+          url: savedAssetUrl,
+          sourcePrompt: idea.imagePrompt,
+        });
+      } catch (error) {
+        await this.cleanupOrphanStorageFile(savedAssetUrl);
+        savedAssetUrl = null;
+        throw error;
+      }
 
       await this.createLog({
         operation: AiOperation.IMAGE,
@@ -734,184 +716,6 @@ STRICT OUTPUT CONTRACT:
     }
   }
 
-  private normalizeIdeas(data: unknown, defaultFormat: string) {
-    const rawIdeas = this.extractIdeasArray(data);
-    return rawIdeas
-      .map((item) => {
-        const topicSource =
-          typeof item.topic === 'string'
-            ? item.topic
-            : typeof item.title === 'string'
-              ? item.title
-              : undefined;
-        const hookSource =
-          typeof item.hook === 'string'
-            ? item.hook
-            : typeof item.description === 'string'
-              ? item.description
-              : undefined;
-        const topic = topicSource?.trim();
-        const hook = hookSource?.trim();
-        const rawFormat =
-          typeof item.format === 'string'
-            ? item.format.trim().toLowerCase()
-            : typeof item.type === 'string'
-              ? item.type.trim().toLowerCase()
-            : defaultFormat;
-        const format = this.isValidIdeaFormat(rawFormat)
-          ? rawFormat
-          : (defaultFormat as IdeaFormat);
-
-        if (!topic || !hook) {
-          return null;
-        }
-
-        return {
-          topic: topic.slice(0, 280),
-          hook: hook.slice(0, 2000),
-          format,
-        };
-      })
-      .filter((item): item is { topic: string; hook: string; format: IdeaFormat } =>
-        Boolean(item),
-      );
-  }
-
-  private extractIdeasArray(
-    data: unknown,
-  ): Array<{
-    topic?: unknown;
-    title?: unknown;
-    hook?: unknown;
-    description?: unknown;
-    format?: unknown;
-    type?: unknown;
-  }> {
-    if (Array.isArray(data)) {
-      return data;
-    }
-    if (!this.isRecord(data)) {
-      return [];
-    }
-    if (Array.isArray(data.ideas)) {
-      return data.ideas;
-    }
-    if (Array.isArray(data.results)) {
-      return data.results;
-    }
-    if (Array.isArray(data.items)) {
-      return data.items;
-    }
-    if (Array.isArray(data.data)) {
-      return data.data;
-    }
-    return [];
-  }
-
-  private normalizeScriptText(data: ScriptResponse): string {
-    const directText = this.pickFirstNonEmptyString([
-      data.text,
-      data.content,
-      data.output,
-      data.result,
-      data.message,
-    ]);
-
-    const scriptField = data.script;
-    const nestedScriptText = this.isRecord(scriptField)
-      ? this.pickFirstNonEmptyString([
-          scriptField.text,
-          scriptField.content,
-          scriptField.output,
-          scriptField.result,
-          scriptField.message,
-        ])
-      : null;
-
-    const reelLike = this.extractReelLikeObject(data);
-    const reelText = reelLike
-      ? this.pickFirstNonEmptyString([
-          reelLike.text,
-          reelLike.script,
-          reelLike.content,
-          reelLike.output,
-          reelLike.result,
-          reelLike.message,
-          reelLike.concept,
-          reelLike.description,
-          reelLike.hook,
-        ])
-      : null;
-
-    const structuredFallbackText = this.buildScriptTextFromStructuredResponse(data);
-
-    const value =
-      directText ??
-      nestedScriptText ??
-      reelText ??
-      structuredFallbackText ??
-      (typeof scriptField === 'string' ? scriptField.trim() : null);
-
-    if (!value) {
-      throw new Error(
-        `LLM returned empty script text. Response preview: ${this.previewUnknown(data)}`,
-      );
-    }
-    return value.slice(0, this.maxScriptChars);
-  }
-
-  private normalizeShotList(data: ScriptResponse): string[] {
-    const reelLike = this.extractReelLikeObject(data);
-    const nestedReelShots = reelLike
-      ? this.pickFirstArray([
-          reelLike.shotList,
-          reelLike.shots,
-          reelLike.scenes,
-          reelLike.steps,
-        ])
-      : null;
-
-    const rawList =
-      this.pickFirstArray([
-        data.shotList,
-        data.shots,
-        data.scenes,
-        data.steps,
-        data.structure,
-        nestedReelShots,
-        this.isRecord(data.script) ? data.script.shotList : null,
-        this.isRecord(data.script) ? data.script.shots : null,
-        this.isRecord(data.script) ? data.script.scenes : null,
-      ]) ??
-      this.toLineArray(
-        this.pickFirstNonEmptyString([
-          this.isRecord(data.script) ? data.script.shotList : null,
-          data.shotList,
-        ]),
-      );
-
-    return rawList
-      .map((item) => this.normalizeShotItem(item))
-      .filter(Boolean)
-      .slice(0, DEFAULT_MAX_SHOTS);
-  }
-
-  private normalizeCaptionText(data: CaptionResponse): string {
-    if (typeof data.text !== 'string' || !data.text.trim()) {
-      throw new Error('LLM returned empty caption text');
-    }
-    return data.text.trim().slice(0, 3000);
-  }
-
-  private normalizeHashtags(data: CaptionResponse): string[] {
-    const hashtags = Array.isArray(data.hashtags) ? data.hashtags : [];
-    return hashtags
-      .filter((item): item is string => typeof item === 'string')
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .slice(0, DEFAULT_MAX_HASHTAGS);
-  }
-
   private async failScript(scriptId: string, error: string) {
     await this.scriptsRepository.update(scriptId, {
       status: GenerationStatus.FAILED,
@@ -931,6 +735,28 @@ STRICT OUTPUT CONTRACT:
       status: GenerationStatus.FAILED,
       error: this.truncateError(error),
     });
+  }
+
+  private async cleanupOrphanStorageFile(
+    publicUrl: string | null,
+  ): Promise<void> {
+    if (!publicUrl) {
+      return;
+    }
+
+    try {
+      const removed =
+        await this.objectStorageService.removeByPublicUrl(publicUrl);
+      if (!removed) {
+        this.logger.warn(
+          `Compensating cleanup could not remove orphan storage file "${publicUrl}"`,
+        );
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Compensating cleanup failed for orphan storage file "${publicUrl}": ${this.toErrorMessage(error)}`,
+      );
+    }
   }
 
   private async createLog(params: {
@@ -960,139 +786,11 @@ STRICT OUTPUT CONTRACT:
         requestId: params.requestId,
         error: params.error ? this.truncateError(params.error) : null,
         errorCode: params.errorCode ?? null,
-        rawResponse: params.rawResponse ? this.truncateRawResponse(params.rawResponse) : null,
+        rawResponse: params.rawResponse
+          ? this.truncateRawResponse(params.rawResponse)
+          : null,
       }),
     );
-  }
-
-  private isValidIdeaFormat(value: string): value is IdeaFormat {
-    return (
-      value === IdeaFormat.REEL ||
-      value === IdeaFormat.SHORT ||
-      value === IdeaFormat.TIKTOK
-    );
-  }
-
-  private isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-  }
-
-  private pickFirstNonEmptyString(values: unknown[]): string | null {
-    for (const value of values) {
-      if (typeof value === 'string' && value.trim()) {
-        return value.trim();
-      }
-    }
-    return null;
-  }
-
-  private pickFirstArray(values: unknown[]): unknown[] | null {
-    for (const value of values) {
-      if (Array.isArray(value)) {
-        return value;
-      }
-    }
-    return null;
-  }
-
-  private normalizeShotItem(value: unknown): string {
-    if (typeof value === 'string') {
-      return value.trim();
-    }
-    if (!this.isRecord(value)) {
-      return '';
-    }
-    return (
-      this.pickFirstNonEmptyString([
-        value.description,
-        value.text,
-        value.title,
-        value.visuals,
-        value.text_overlay,
-        value.audio,
-        value.shot,
-        value.scene,
-        value.action,
-      ]) ?? ''
-    );
-  }
-
-  private buildScriptTextFromStructuredResponse(
-    data: ScriptResponse,
-  ): string | null {
-    const title = this.pickFirstNonEmptyString([data.reel_title]);
-    const duration = this.pickFirstNonEmptyString([data.duration]);
-    const theme = this.pickFirstNonEmptyString([data.theme]);
-    const structureItems = Array.isArray(data.structure) ? data.structure : [];
-
-    const lines: string[] = [];
-    if (title) {
-      lines.push(`Title: ${title}`);
-    }
-    if (duration) {
-      lines.push(`Duration: ${duration}`);
-    }
-    if (theme) {
-      lines.push(`Theme: ${theme}`);
-    }
-
-    const structureLines = structureItems
-      .map((item, index) => {
-        if (!this.isRecord(item)) {
-          if (typeof item === 'string' && item.trim()) {
-            return `${index + 1}. ${item.trim()}`;
-          }
-          return '';
-        }
-
-        const time = this.pickFirstNonEmptyString([item.time]);
-        const visuals = this.pickFirstNonEmptyString([
-          item.visuals,
-          item.description,
-          item.text,
-        ]);
-        const audio = this.pickFirstNonEmptyString([item.audio]);
-        const overlay = this.pickFirstNonEmptyString([
-          item.text_overlay,
-          item.overlay,
-        ]);
-
-        const parts = [time ? `[${time}]` : null, visuals, audio ? `Audio: ${audio}` : null, overlay ? `Text: ${overlay}` : null]
-          .filter((part): part is string => Boolean(part));
-
-        return parts.length ? `${index + 1}. ${parts.join(' | ')}` : '';
-      })
-      .filter(Boolean);
-
-    if (structureLines.length) {
-      lines.push('Structure:', ...structureLines);
-    }
-
-    if (!lines.length) {
-      return null;
-    }
-
-    return lines.join('\n');
-  }
-
-  private extractReelLikeObject(data: ScriptResponse): Record<string, unknown> | null {
-    if (this.isRecord(data.reel)) {
-      return data.reel;
-    }
-    if (this.isRecord(data.storyboard)) {
-      return data.storyboard;
-    }
-    return null;
-  }
-
-  private toLineArray(value: string | null): string[] {
-    if (!value) {
-      return [];
-    }
-    return value
-      .split('\n')
-      .map((item) => item.replace(/^\s*[-*]\s*/, '').trim())
-      .filter(Boolean);
   }
 
   private shouldUseMockFallback(
@@ -1141,19 +839,11 @@ STRICT OUTPUT CONTRACT:
   }
 
   private truncateError(error: string): string {
-    return error;
+    return normalizeAiRunLogError(error) ?? '';
   }
 
   private truncateRawResponse(rawResponse: string): string {
-    return rawResponse.slice(0, 60000);
-  }
-
-  private previewUnknown(value: unknown): string {
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
+    return normalizeAiRunLogRawResponse(rawResponse) ?? '';
   }
 
   private toNumber(value: string | undefined, fallback: number): number {
@@ -1193,5 +883,4 @@ STRICT OUTPUT CONTRACT:
       rawResponse: null,
     };
   }
-
 }

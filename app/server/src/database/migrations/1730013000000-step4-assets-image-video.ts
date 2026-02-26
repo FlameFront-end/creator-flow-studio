@@ -44,8 +44,12 @@ export class Step4AssetsImageVideo1730013000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_assets_ideaId_createdAt"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_assets_ideaId_createdAt"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "assets"`);
-    await queryRunner.query(`ALTER TABLE "ideas" DROP COLUMN IF EXISTS "imagePrompt"`);
+    await queryRunner.query(
+      `ALTER TABLE "ideas" DROP COLUMN IF EXISTS "imagePrompt"`,
+    );
   }
 }

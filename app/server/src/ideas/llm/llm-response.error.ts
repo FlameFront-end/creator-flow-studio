@@ -17,4 +17,3 @@ export class LlmResponseError extends Error {
     this.rawResponse = options?.rawResponse ?? null;
   }
 }
-

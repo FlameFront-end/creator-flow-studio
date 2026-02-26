@@ -94,7 +94,9 @@ export class Step3IdeasAndScripts1730012000000 implements MigrationInterface {
     await queryRunner.query(
       `DROP INDEX IF EXISTS "IDX_captions_ideaId_createdAt"`,
     );
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_scripts_ideaId_createdAt"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_scripts_ideaId_createdAt"`,
+    );
     await queryRunner.query(
       `DROP INDEX IF EXISTS "IDX_ideas_projectId_createdAt"`,
     );
@@ -104,4 +106,3 @@ export class Step3IdeasAndScripts1730012000000 implements MigrationInterface {
     await queryRunner.query(`DROP TABLE IF EXISTS "ideas"`);
   }
 }
-

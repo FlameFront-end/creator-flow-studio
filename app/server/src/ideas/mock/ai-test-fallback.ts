@@ -91,6 +91,13 @@ const IMAGE_PROMPT_SEEDS: string[] = [
   'Вертикальный разговорный сетап, минималистичный студийный фон, контролируемые блики, четкий свет по лицу, премиальный реалистичный стиль',
 ];
 
+const VIDEO_PROMPT_SEEDS: string[] = [
+  'Вертикальное видео 9:16, динамичный handheld с мягкой стабилизацией, плавный push-in, акцент на жесты и мимику, мягкий контровой свет, реалистичная цветокоррекция, естественный motion blur',
+  'Вертикальная сцена 9:16 с чередованием крупных и средних планов, монтаж в ритме речи, легкие whip-pan переходы, детальная фактура кожи и одежды, кинематографичный контраст',
+  'Вертикальный talking-head сетап 9:16, чистый фон, мягкий ключевой свет + practical light, плавные camera moves, четкая фокусировка на лице, реалистичный премиальный стиль',
+  'Вертикальный b-roll 9:16 рабочего процесса креатора, быстрые перебивки, крупные планы рук и экрана, динамичные ракурсы, контролируемые блики, высокодетализированная картинка',
+];
+
 const randomItem = <T>(items: T[]): T => {
   if (!items.length) {
     throw new Error('Mock seed list is empty');
@@ -126,10 +133,12 @@ export const buildMockCaption = (): { text: string; hashtags: string[] } =>
 export const buildMockImagePrompt = (): string =>
   randomItem(IMAGE_PROMPT_SEEDS);
 
+export const buildMockVideoPrompt = (): string =>
+  randomItem(VIDEO_PROMPT_SEEDS);
+
 const toIdeaFormat = (format: string): IdeaFormat => {
   const normalized = format.trim().toLowerCase();
-  if (normalized === IdeaFormat.REEL) return IdeaFormat.REEL;
-  if (normalized === IdeaFormat.SHORT) return IdeaFormat.SHORT;
-  if (normalized === IdeaFormat.TIKTOK) return IdeaFormat.TIKTOK;
+  if (normalized === 'short') return IdeaFormat.SHORT;
+  if (normalized === 'tiktok') return IdeaFormat.TIKTOK;
   return IdeaFormat.REEL;
 };

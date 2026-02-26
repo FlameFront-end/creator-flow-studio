@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
   createCipheriv,
   createDecipheriv,
@@ -8,7 +8,6 @@ import {
 
 @Injectable()
 export class AiSettingsCryptoService {
-  private readonly logger = new Logger(AiSettingsCryptoService.name);
   private readonly algorithm = 'aes-256-gcm';
   private readonly key = this.buildKey();
 
@@ -57,13 +56,10 @@ export class AiSettingsCryptoService {
   }
 
   private buildKey(): Buffer {
-    const seed =
-      process.env.AI_SETTINGS_ENCRYPTION_KEY?.trim() ||
-      process.env.ADMIN_API_TOKEN?.trim() ||
-      'creator-flow-studio-dev-key';
-    if (!process.env.AI_SETTINGS_ENCRYPTION_KEY) {
-      this.logger.warn(
-        'AI_SETTINGS_ENCRYPTION_KEY is not configured. Falling back to ADMIN_API_TOKEN-derived key.',
+    const seed = process.env.AI_SETTINGS_ENCRYPTION_KEY?.trim();
+    if (!seed) {
+      throw new Error(
+        'AI_SETTINGS_ENCRYPTION_KEY is required for AI secret encryption.',
       );
     }
     return createHash('sha256').update(seed, 'utf8').digest();

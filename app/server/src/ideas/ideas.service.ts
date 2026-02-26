@@ -1,12 +1,12 @@
 import {
+  BadRequestException,
   ConflictException,
-  Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { AiSettingsService } from '../ai-settings/ai-settings.service';
+import { EntityManager, Repository } from 'typeorm';
 import { Persona } from '../personas/entities/persona.entity';
 import { Project } from '../projects/entities/project.entity';
 import { AiQueueService } from './ai-queue.service';
@@ -15,38 +15,54 @@ import { GenerateImageDto } from './dto/generate-image.dto';
 import { GenerateIdeasDto } from './dto/generate-ideas.dto';
 import { GenerateScriptDto } from './dto/generate-script.dto';
 import { ListAiRunLogsQueryDto } from './dto/list-ai-run-logs-query.dto';
-import { ListIdeasQueryDto } from './dto/list-ideas-query.dto';
-import { AiOperation, AiRunLog } from './entities/ai-run-log.entity';
+import {
+  DEFAULT_IDEAS_PAGE_LIMIT,
+  ListIdeasQueryDto,
+} from './dto/list-ideas-query.dto';
+import { AiRunLog } from './entities/ai-run-log.entity';
 import { Caption } from './entities/caption.entity';
 import { Asset, AssetType } from './entities/asset.entity';
 import { GenerationStatus } from './entities/generation-status.enum';
 import { Idea, IdeaFormat } from './entities/idea.entity';
 import { Script } from './entities/script.entity';
-import {
-  DEFAULT_IMAGE_MAX_PROMPT_CHARS,
-  DEFAULT_IDEA_COUNT,
-  DEFAULT_IDEA_FORMAT,
-} from './ideas.constants';
-import { LLM_PROVIDER_TOKEN } from './llm/llm-provider.interface';
-import type { LlmProvider } from './llm/llm-provider.interface';
-import { LlmResponseError } from './llm/llm-response.error';
-import { PromptService } from '../prompt/prompt.service';
-import { PromptTemplateKey } from '../prompt-templates/entities/prompt-template.entity';
-import { buildMockImagePrompt } from './mock/ai-test-fallback';
+import { DEFAULT_IDEA_COUNT, DEFAULT_IDEA_FORMAT } from './ideas.constants';
 import { LocalObjectStorageService } from '../storage/local-object-storage.service';
+import { IdeasPromptGenerationService } from './ideas-prompt-generation.service';
+
+type IdeasPageCursor = {
+  createdAt: string;
+  id: string;
+};
+
+type IdeasListItem = Idea & {
+  latestScript: Script | null;
+  latestCaption: Caption | null;
+  latestImage: Asset | null;
+  latestVideo: Asset | null;
+  latestImageStatus: GenerationStatus | null;
+  latestVideoStatus: GenerationStatus | null;
+  scriptSucceededCount: number;
+  captionSucceededCount: number;
+  imageAssetsCount: number;
+  videoAssetsCount: number;
+  imageSucceededCount: number;
+  videoSucceededCount: number;
+};
+
+type IdeasPageResponse = {
+  items: IdeasListItem[];
+  nextCursor: IdeasPageCursor | null;
+  hasMore: boolean;
+};
 
 @Injectable()
 export class IdeasService {
-  private static readonly MOCK_PROVIDER_NAME = 'mock-test-fallback';
-  private static readonly MOCK_MODEL_NAME = 'mock-ai';
+  private readonly logger = new Logger(IdeasService.name);
 
   constructor(
-    private readonly aiSettingsService: AiSettingsService,
     private readonly aiQueueService: AiQueueService,
-    private readonly promptService: PromptService,
+    private readonly ideasPromptGenerationService: IdeasPromptGenerationService,
     private readonly objectStorageService: LocalObjectStorageService,
-    @Inject(LLM_PROVIDER_TOKEN)
-    private readonly llmProvider: LlmProvider,
     @InjectRepository(Project)
     private readonly projectsRepository: Repository<Project>,
     @InjectRepository(Persona)
@@ -84,517 +100,636 @@ export class IdeasService {
   }
 
   async enqueueScriptGeneration(ideaId: string, dto: GenerateScriptDto) {
-    const idea = await this.ideasRepository.findOne({ where: { id: ideaId } });
-    if (!idea) {
-      throw new NotFoundException('Idea not found');
-    }
-
-    const hasCompleted = await this.scriptsRepository.exists({
-      where: {
-        ideaId,
-        status: GenerationStatus.SUCCEEDED,
-      },
-    });
-    if (hasCompleted && !dto.regenerate) {
-      throw new ConflictException(
-        'Script already generated. Use regenerate=true to run again.',
-      );
-    }
-
-    const script = await this.scriptsRepository.save(
-      this.scriptsRepository.create({
-        ideaId,
-        status: GenerationStatus.QUEUED,
-      }),
-    );
-    const job = await this.aiQueueService.enqueueScriptJob({
+    const { script, wasCreated } = await this.withIdeaLock(
       ideaId,
-      scriptId: script.id,
-    });
+      async (manager) => {
+        const scriptsRepository = manager.getRepository(Script);
+        const hasCompleted = await scriptsRepository.exists({
+          where: {
+            ideaId,
+            status: GenerationStatus.SUCCEEDED,
+          },
+        });
+        if (hasCompleted && !dto.regenerate) {
+          throw new ConflictException(
+            'Script already generated. Use regenerate=true to run again.',
+          );
+        }
 
-    return {
-      jobId: String(job.id),
-      scriptId: script.id,
-      status: script.status,
-    };
+        const activeScript = await scriptsRepository.findOne({
+          where: [
+            {
+              ideaId,
+              status: GenerationStatus.QUEUED,
+            },
+            {
+              ideaId,
+              status: GenerationStatus.RUNNING,
+            },
+          ],
+          order: {
+            createdAt: 'DESC',
+          },
+        });
+        if (activeScript) {
+          return {
+            script: activeScript,
+            wasCreated: false,
+          };
+        }
+
+        const script = await scriptsRepository.save(
+          scriptsRepository.create({
+            ideaId,
+            status: GenerationStatus.QUEUED,
+          }),
+        );
+        return {
+          script,
+          wasCreated: true,
+        };
+      },
+    );
+
+    try {
+      const job = await this.aiQueueService.enqueueScriptJob({
+        ideaId,
+        scriptId: script.id,
+      });
+
+      return {
+        jobId: String(job.id),
+        scriptId: script.id,
+        status: script.status,
+      };
+    } catch (error) {
+      if (wasCreated) {
+        await this.scriptsRepository.update(script.id, {
+          status: GenerationStatus.FAILED,
+          error: this.toErrorMessage(error),
+        });
+      }
+      throw error;
+    }
   }
 
   async enqueueCaptionGeneration(ideaId: string, dto: GenerateCaptionDto) {
-    const idea = await this.ideasRepository.findOne({ where: { id: ideaId } });
-    if (!idea) {
-      throw new NotFoundException('Idea not found');
-    }
-
-    const hasCompleted = await this.captionsRepository.exists({
-      where: {
-        ideaId,
-        status: GenerationStatus.SUCCEEDED,
-      },
-    });
-    if (hasCompleted && !dto.regenerate) {
-      throw new ConflictException(
-        'Caption already generated. Use regenerate=true to run again.',
-      );
-    }
-
-    const caption = await this.captionsRepository.save(
-      this.captionsRepository.create({
-        ideaId,
-        status: GenerationStatus.QUEUED,
-      }),
-    );
-    const job = await this.aiQueueService.enqueueCaptionJob({
+    const { caption, wasCreated } = await this.withIdeaLock(
       ideaId,
-      captionId: caption.id,
-    });
+      async (manager) => {
+        const captionsRepository = manager.getRepository(Caption);
+        const hasCompleted = await captionsRepository.exists({
+          where: {
+            ideaId,
+            status: GenerationStatus.SUCCEEDED,
+          },
+        });
+        if (hasCompleted && !dto.regenerate) {
+          throw new ConflictException(
+            'Caption already generated. Use regenerate=true to run again.',
+          );
+        }
 
-    return {
-      jobId: String(job.id),
-      captionId: caption.id,
-      status: caption.status,
-    };
+        const activeCaption = await captionsRepository.findOne({
+          where: [
+            {
+              ideaId,
+              status: GenerationStatus.QUEUED,
+            },
+            {
+              ideaId,
+              status: GenerationStatus.RUNNING,
+            },
+          ],
+          order: {
+            createdAt: 'DESC',
+          },
+        });
+        if (activeCaption) {
+          return {
+            caption: activeCaption,
+            wasCreated: false,
+          };
+        }
+
+        const caption = await captionsRepository.save(
+          captionsRepository.create({
+            ideaId,
+            status: GenerationStatus.QUEUED,
+          }),
+        );
+        return {
+          caption,
+          wasCreated: true,
+        };
+      },
+    );
+
+    try {
+      const job = await this.aiQueueService.enqueueCaptionJob({
+        ideaId,
+        captionId: caption.id,
+      });
+
+      return {
+        jobId: String(job.id),
+        captionId: caption.id,
+        status: caption.status,
+      };
+    } catch (error) {
+      if (wasCreated) {
+        await this.captionsRepository.update(caption.id, {
+          status: GenerationStatus.FAILED,
+          error: this.toErrorMessage(error),
+        });
+      }
+      throw error;
+    }
   }
 
   async generateImagePrompt(ideaId: string) {
-    const idea = await this.ideasRepository.findOne({ where: { id: ideaId } });
-    if (!idea) {
-      throw new NotFoundException('Idea not found');
-    }
-
-    const startedAt = Date.now();
-    const runtimeConfig = await this.aiSettingsService.getRuntimeConfig();
-    try {
-      const promptPreview = await this.promptService.preview({
-        personaId: idea.personaId,
-        templateKey: PromptTemplateKey.IMAGE_PROMPT,
-        variables: {
-          topic: idea.topic,
-          idea_topic: idea.topic,
-          hook: idea.hook,
-          idea_hook: idea.hook,
-          format: idea.format,
-        },
-      });
-      const response = await this.llmProvider.generateJson<{
-        prompt?: unknown;
-      }>({
-        prompt: `${promptPreview.prompt}
-
-STRICT OUTPUT CONTRACT:
-- Return a single JSON object only.
-- Do not use markdown code fences.
-- Do not include explanations or extra keys.
-- Required shape:
-{
-  "prompt":"detailed image prompt"
-}`,
-        maxTokens: runtimeConfig.maxTokens,
-        temperature: 0.7,
-        config: runtimeConfig,
-        responseSchema: {
-          name: 'image_prompt_output',
-          strict: true,
-          schema: {
-            type: 'object',
-            additionalProperties: false,
-            required: ['prompt'],
-            properties: {
-              prompt: {
-                type: 'string',
-                minLength: 1,
-              },
-            },
-          },
-        },
-      });
-
-      const prompt = this.normalizeImagePrompt(response.data);
-      await this.ideasRepository.update(idea.id, { imagePrompt: prompt });
-      await this.logsRepository.save(
-        this.logsRepository.create({
-          provider: response.provider,
-          model: response.model,
-          operation: AiOperation.IMAGE_PROMPT,
-          projectId: idea.projectId,
-          ideaId: idea.id,
-          status: GenerationStatus.SUCCEEDED,
-          latencyMs: Date.now() - startedAt,
-          tokens: response.tokens,
-          requestId: response.requestId,
-          error: null,
-        }),
-      );
-
-      return { prompt };
-    } catch (error) {
-      if (this.shouldUseMockFallback(error, runtimeConfig.aiTestMode)) {
-        const prompt = buildMockImagePrompt();
-        await this.ideasRepository.update(idea.id, { imagePrompt: prompt });
-        await this.logsRepository.save(
-          this.logsRepository.create({
-            provider: IdeasService.MOCK_PROVIDER_NAME,
-            model: IdeasService.MOCK_MODEL_NAME,
-            operation: AiOperation.IMAGE_PROMPT,
-            projectId: idea.projectId,
-            ideaId: idea.id,
-            status: GenerationStatus.SUCCEEDED,
-            latencyMs: Date.now() - startedAt,
-            tokens: 0,
-            requestId: null,
-            error: null,
-          }),
-        );
-
-        return { prompt };
-      }
-
-      const details = this.extractErrorDetails(error);
-      await this.logsRepository.save(
-        this.logsRepository.create({
-          provider: runtimeConfig.provider,
-          model: runtimeConfig.model || 'unknown-model',
-          operation: AiOperation.IMAGE_PROMPT,
-          projectId: idea.projectId,
-          ideaId: idea.id,
-          status: GenerationStatus.FAILED,
-          latencyMs: Date.now() - startedAt,
-          tokens: null,
-          requestId: null,
-          error: details.message,
-          errorCode: details.code,
-          rawResponse: details.rawResponse,
-        }),
-      );
-      throw error;
-    }
+    return this.ideasPromptGenerationService.generateImagePrompt(ideaId);
   }
 
   async generateVideoPrompt(ideaId: string) {
-    const idea = await this.ideasRepository.findOne({ where: { id: ideaId } });
-    if (!idea) {
-      throw new NotFoundException('Idea not found');
-    }
+    return this.ideasPromptGenerationService.generateVideoPrompt(ideaId);
+  }
 
-    const startedAt = Date.now();
-    const runtimeConfig = await this.aiSettingsService.getRuntimeConfig();
-    try {
-      const promptPreview = await this.promptService.preview({
-        personaId: idea.personaId,
-        templateKey: PromptTemplateKey.VIDEO_PROMPT,
-        variables: {
-          topic: idea.topic,
-          idea_topic: idea.topic,
-          hook: idea.hook,
-          idea_hook: idea.hook,
-          format: idea.format,
-        },
-      });
-      const response = await this.llmProvider.generateJson<{
-        prompt?: unknown;
-      }>({
-        prompt: `${promptPreview.prompt}
+  async enqueueImageGeneration(ideaId: string, dto: GenerateImageDto) {
+    const { asset, wasCreated } = await this.withIdeaLock(
+      ideaId,
+      async (manager, idea) => {
+        if (!idea.imagePrompt?.trim()) {
+          throw new ConflictException(
+            'Image prompt is empty. Generate image prompt first.',
+          );
+        }
 
-STRICT OUTPUT CONTRACT:
-- Return a single JSON object only.
-- Do not use markdown code fences.
-- Do not include explanations or extra keys.
-- Required shape:
-{
-  "prompt":"detailed video prompt"
-}`,
-        maxTokens: runtimeConfig.maxTokens,
-        temperature: 0.7,
-        config: runtimeConfig,
-        responseSchema: {
-          name: 'video_prompt_output',
-          strict: true,
-          schema: {
-            type: 'object',
-            additionalProperties: false,
-            required: ['prompt'],
-            properties: {
-              prompt: {
-                type: 'string',
-                minLength: 1,
-              },
-            },
-          },
-        },
-      });
-
-      const prompt = this.normalizeImagePrompt(response.data);
-      await this.ideasRepository.update(idea.id, { videoPrompt: prompt });
-      await this.logsRepository.save(
-        this.logsRepository.create({
-          provider: response.provider,
-          model: response.model,
-          operation: AiOperation.VIDEO_PROMPT,
-          projectId: idea.projectId,
-          ideaId: idea.id,
-          status: GenerationStatus.SUCCEEDED,
-          latencyMs: Date.now() - startedAt,
-          tokens: response.tokens,
-          requestId: response.requestId,
-          error: null,
-        }),
-      );
-
-      return { prompt };
-    } catch (error) {
-      if (this.shouldUseMockFallback(error, runtimeConfig.aiTestMode)) {
-        const prompt = buildMockImagePrompt();
-        await this.ideasRepository.update(idea.id, { videoPrompt: prompt });
-        await this.logsRepository.save(
-          this.logsRepository.create({
-            provider: IdeasService.MOCK_PROVIDER_NAME,
-            model: IdeasService.MOCK_MODEL_NAME,
-            operation: AiOperation.VIDEO_PROMPT,
-            projectId: idea.projectId,
-            ideaId: idea.id,
+        const assetsRepository = manager.getRepository(Asset);
+        const hasCompleted = await assetsRepository.exists({
+          where: {
+            ideaId,
+            type: AssetType.IMAGE,
             status: GenerationStatus.SUCCEEDED,
-            latencyMs: Date.now() - startedAt,
-            tokens: 0,
-            requestId: null,
-            error: null,
+          },
+        });
+        if (hasCompleted && !dto.regenerate) {
+          throw new ConflictException(
+            'Image already generated. Use regenerate=true to run again.',
+          );
+        }
+
+        const activeAsset = await assetsRepository.findOne({
+          where: [
+            {
+              ideaId,
+              type: AssetType.IMAGE,
+              status: GenerationStatus.QUEUED,
+            },
+            {
+              ideaId,
+              type: AssetType.IMAGE,
+              status: GenerationStatus.RUNNING,
+            },
+          ],
+          order: {
+            createdAt: 'DESC',
+          },
+        });
+        if (activeAsset) {
+          return {
+            asset: activeAsset,
+            wasCreated: false,
+          };
+        }
+
+        const asset = await assetsRepository.save(
+          assetsRepository.create({
+            ideaId,
+            type: AssetType.IMAGE,
+            sourcePrompt: idea.imagePrompt,
+            status: GenerationStatus.QUEUED,
           }),
         );
+        return {
+          asset,
+          wasCreated: true,
+        };
+      },
+    );
 
-        return { prompt };
-      }
+    try {
+      const job = await this.aiQueueService.enqueueImageJob({
+        ideaId,
+        assetId: asset.id,
+      });
 
-      const details = this.extractErrorDetails(error);
-      await this.logsRepository.save(
-        this.logsRepository.create({
-          provider: runtimeConfig.provider,
-          model: runtimeConfig.model || 'unknown-model',
-          operation: AiOperation.VIDEO_PROMPT,
-          projectId: idea.projectId,
-          ideaId: idea.id,
+      return {
+        jobId: String(job.id),
+        assetId: asset.id,
+        status: asset.status,
+      };
+    } catch (error) {
+      if (wasCreated) {
+        await this.assetsRepository.update(asset.id, {
           status: GenerationStatus.FAILED,
-          latencyMs: Date.now() - startedAt,
-          tokens: null,
-          requestId: null,
-          error: details.message,
-          errorCode: details.code,
-          rawResponse: details.rawResponse,
-        }),
-      );
+          error: this.toErrorMessage(error),
+        });
+      }
       throw error;
     }
   }
 
-  async enqueueImageGeneration(ideaId: string, dto: GenerateImageDto) {
-    const idea = await this.ideasRepository.findOne({ where: { id: ideaId } });
-    if (!idea) {
-      throw new NotFoundException('Idea not found');
-    }
-    if (!idea.imagePrompt?.trim()) {
-      throw new ConflictException(
-        'Image prompt is empty. Generate image prompt first.',
-      );
-    }
-
-    const hasCompleted = await this.assetsRepository.exists({
-      where: {
-        ideaId,
-        type: AssetType.IMAGE,
-        status: GenerationStatus.SUCCEEDED,
-      },
-    });
-    if (hasCompleted && !dto.regenerate) {
-      throw new ConflictException(
-        'Image already generated. Use regenerate=true to run again.',
-      );
-    }
-
-    const asset = await this.assetsRepository.save(
-      this.assetsRepository.create({
-        ideaId,
-        type: AssetType.IMAGE,
-        sourcePrompt: idea.imagePrompt,
-        status: GenerationStatus.QUEUED,
-      }),
-    );
-
-    const job = await this.aiQueueService.enqueueImageJob({
-      ideaId,
-      assetId: asset.id,
-    });
-
-    return {
-      jobId: String(job.id),
-      assetId: asset.id,
-      status: asset.status,
-    };
-  }
-
   async enqueueVideoGeneration(ideaId: string, dto: GenerateImageDto) {
-    const idea = await this.ideasRepository.findOne({ where: { id: ideaId } });
-    if (!idea) {
-      throw new NotFoundException('Idea not found');
-    }
-    if (!idea.videoPrompt?.trim()) {
-      throw new ConflictException(
-        'Video prompt is empty. Generate video prompt first.',
-      );
-    }
+    const { asset, wasCreated } = await this.withIdeaLock(
+      ideaId,
+      async (manager, idea) => {
+        if (!idea.videoPrompt?.trim()) {
+          throw new ConflictException(
+            'Video prompt is empty. Generate video prompt first.',
+          );
+        }
 
-    const hasCompleted = await this.assetsRepository.exists({
-      where: {
-        ideaId,
-        type: AssetType.VIDEO,
-        status: GenerationStatus.SUCCEEDED,
+        const assetsRepository = manager.getRepository(Asset);
+        const hasCompleted = await assetsRepository.exists({
+          where: {
+            ideaId,
+            type: AssetType.VIDEO,
+            status: GenerationStatus.SUCCEEDED,
+          },
+        });
+        if (hasCompleted && !dto.regenerate) {
+          throw new ConflictException(
+            'Video already generated. Use regenerate=true to run again.',
+          );
+        }
+
+        const activeAsset = await assetsRepository.findOne({
+          where: [
+            {
+              ideaId,
+              type: AssetType.VIDEO,
+              status: GenerationStatus.QUEUED,
+            },
+            {
+              ideaId,
+              type: AssetType.VIDEO,
+              status: GenerationStatus.RUNNING,
+            },
+          ],
+          order: {
+            createdAt: 'DESC',
+          },
+        });
+        if (activeAsset) {
+          return {
+            asset: activeAsset,
+            wasCreated: false,
+          };
+        }
+
+        const asset = await assetsRepository.save(
+          assetsRepository.create({
+            ideaId,
+            type: AssetType.VIDEO,
+            sourcePrompt: idea.videoPrompt,
+            status: GenerationStatus.QUEUED,
+          }),
+        );
+        return {
+          asset,
+          wasCreated: true,
+        };
       },
-    });
-    if (hasCompleted && !dto.regenerate) {
-      throw new ConflictException(
-        'Video already generated. Use regenerate=true to run again.',
-      );
-    }
-
-    const asset = await this.assetsRepository.save(
-      this.assetsRepository.create({
-        ideaId,
-        type: AssetType.VIDEO,
-        sourcePrompt: idea.videoPrompt,
-        status: GenerationStatus.QUEUED,
-      }),
     );
 
-    const job = await this.aiQueueService.enqueueVideoJob({
-      ideaId,
-      assetId: asset.id,
-    });
+    try {
+      const job = await this.aiQueueService.enqueueVideoJob({
+        ideaId,
+        assetId: asset.id,
+      });
 
-    return {
-      jobId: String(job.id),
-      assetId: asset.id,
-      status: asset.status,
-    };
+      return {
+        jobId: String(job.id),
+        assetId: asset.id,
+        status: asset.status,
+      };
+    } catch (error) {
+      if (wasCreated) {
+        await this.assetsRepository.update(asset.id, {
+          status: GenerationStatus.FAILED,
+          error: this.toErrorMessage(error),
+        });
+      }
+      throw error;
+    }
   }
 
-  async findAll(query: ListIdeasQueryDto) {
-    const where = query.projectId ? { projectId: query.projectId } : {};
-    const ideas = await this.ideasRepository.find({
-      where,
-      order: { createdAt: 'DESC' },
-    });
+  async findAll(query: ListIdeasQueryDto): Promise<IdeasPageResponse> {
+    const limit = query.limit ?? DEFAULT_IDEAS_PAGE_LIMIT;
+    const cursor = this.resolveIdeasCursor(query);
+
+    const qb = this.ideasRepository
+      .createQueryBuilder('idea')
+      .orderBy('idea.createdAt', 'DESC')
+      .addOrderBy('idea.id', 'DESC')
+      .take(limit + 1);
+
+    if (query.projectId) {
+      qb.where('idea.projectId = :projectId', {
+        projectId: query.projectId,
+      });
+    }
+
+    if (cursor) {
+      qb.andWhere(
+        '(idea.createdAt < :cursorCreatedAt OR (idea.createdAt = :cursorCreatedAt AND idea.id < :cursorId))',
+        {
+          cursorCreatedAt: cursor.createdAt,
+          cursorId: cursor.id,
+        },
+      );
+    }
+
+    const ideasBatch = await qb.getMany();
+    const hasMore = ideasBatch.length > limit;
+    const ideas = hasMore ? ideasBatch.slice(0, limit) : ideasBatch;
 
     if (!ideas.length) {
-      return [];
+      return {
+        items: [],
+        nextCursor: null,
+        hasMore: false,
+      };
     }
 
     const ideaIds = ideas.map((idea) => idea.id);
-    const [scripts, captions, assets] = await Promise.all([
-      this.scriptsRepository.find({
-        where: ideaIds.map((id) => ({ ideaId: id })),
-        order: { createdAt: 'DESC' },
-      }),
-      this.captionsRepository.find({
-        where: ideaIds.map((id) => ({ ideaId: id })),
-        order: { createdAt: 'DESC' },
-      }),
-      this.assetsRepository.find({
-        where: ideaIds.map((id) => ({ ideaId: id })),
-        order: { createdAt: 'DESC' },
-      }),
+    const [
+      latestScriptsByIdea,
+      latestCaptionsByIdea,
+      scriptSucceededCountByIdea,
+      captionSucceededCountByIdea,
+      latestAssetStatusesByIdea,
+      latestSucceededAssetsByIdea,
+      assetCountsByIdea,
+    ] = await Promise.all([
+      this.fetchLatestScriptsByIdea(ideaIds),
+      this.fetchLatestCaptionsByIdea(ideaIds),
+      this.fetchScriptSucceededCountByIdea(ideaIds),
+      this.fetchCaptionSucceededCountByIdea(ideaIds),
+      this.fetchLatestAssetStatusesByIdea(ideaIds),
+      this.fetchLatestSucceededAssetsByIdea(ideaIds),
+      this.fetchAssetCountsByIdea(ideaIds),
     ]);
 
-    const latestScriptsByIdea = new Map<string, Script>();
-    for (const script of scripts) {
-      if (!latestScriptsByIdea.has(script.ideaId)) {
-        latestScriptsByIdea.set(script.ideaId, script);
-      }
-    }
+    const items = ideas.map((idea) => {
+      const counts = assetCountsByIdea.get(idea.id);
+      return {
+        ...idea,
+        latestScript: latestScriptsByIdea.get(idea.id) ?? null,
+        latestCaption: latestCaptionsByIdea.get(idea.id) ?? null,
+        latestImage:
+          latestSucceededAssetsByIdea.imageByIdea.get(idea.id) ?? null,
+        latestVideo:
+          latestSucceededAssetsByIdea.videoByIdea.get(idea.id) ?? null,
+        latestImageStatus:
+          latestAssetStatusesByIdea.imageStatusByIdea.get(idea.id) ?? null,
+        latestVideoStatus:
+          latestAssetStatusesByIdea.videoStatusByIdea.get(idea.id) ?? null,
+        scriptSucceededCount: scriptSucceededCountByIdea.get(idea.id) ?? 0,
+        captionSucceededCount: captionSucceededCountByIdea.get(idea.id) ?? 0,
+        imageAssetsCount: counts?.imageAssetsCount ?? 0,
+        videoAssetsCount: counts?.videoAssetsCount ?? 0,
+        imageSucceededCount: counts?.imageSucceededCount ?? 0,
+        videoSucceededCount: counts?.videoSucceededCount ?? 0,
+      };
+    });
 
-    const latestCaptionsByIdea = new Map<string, Caption>();
-    for (const caption of captions) {
-      if (!latestCaptionsByIdea.has(caption.ideaId)) {
-        latestCaptionsByIdea.set(caption.ideaId, caption);
-      }
-    }
-    const scriptSucceededCountByIdea = new Map<string, number>();
-    for (const script of scripts) {
-      if (script.status === GenerationStatus.SUCCEEDED) {
-        scriptSucceededCountByIdea.set(
-          script.ideaId,
-          (scriptSucceededCountByIdea.get(script.ideaId) ?? 0) + 1,
-        );
-      }
-    }
-    const captionSucceededCountByIdea = new Map<string, number>();
-    for (const caption of captions) {
-      if (caption.status === GenerationStatus.SUCCEEDED) {
-        captionSucceededCountByIdea.set(
-          caption.ideaId,
-          (captionSucceededCountByIdea.get(caption.ideaId) ?? 0) + 1,
-        );
-      }
-    }
-
-    const currentImagesByIdea = new Map<string, Asset>();
-    const currentVideosByIdea = new Map<string, Asset>();
-    const latestImageStatusByIdea = new Map<string, GenerationStatus>();
-    const latestVideoStatusByIdea = new Map<string, GenerationStatus>();
-    const imageAssetsCountByIdea = new Map<string, number>();
-    const videoAssetsCountByIdea = new Map<string, number>();
-    const imageSucceededCountByIdea = new Map<string, number>();
-    const videoSucceededCountByIdea = new Map<string, number>();
-    for (const asset of assets) {
-      if (asset.type === AssetType.IMAGE) {
-        if (!latestImageStatusByIdea.has(asset.ideaId)) {
-          latestImageStatusByIdea.set(asset.ideaId, asset.status);
-        }
-        imageAssetsCountByIdea.set(
-          asset.ideaId,
-          (imageAssetsCountByIdea.get(asset.ideaId) ?? 0) + 1,
-        );
-        if (asset.status === GenerationStatus.SUCCEEDED) {
-          imageSucceededCountByIdea.set(
-            asset.ideaId,
-            (imageSucceededCountByIdea.get(asset.ideaId) ?? 0) + 1,
-          );
-          if (!currentImagesByIdea.has(asset.ideaId)) {
-            currentImagesByIdea.set(asset.ideaId, asset);
+    const lastIdea = items[items.length - 1];
+    const nextCursor =
+      hasMore && lastIdea
+        ? {
+            createdAt: lastIdea.createdAt.toISOString(),
+            id: lastIdea.id,
           }
-        }
+        : null;
+
+    return {
+      items,
+      nextCursor,
+      hasMore,
+    };
+  }
+
+  private resolveIdeasCursor(
+    query: ListIdeasQueryDto,
+  ): { createdAt: string; id: string } | null {
+    const hasCreatedAt = Boolean(query.cursorCreatedAt);
+    const hasId = Boolean(query.cursorId);
+
+    if (hasCreatedAt !== hasId) {
+      throw new BadRequestException(
+        'cursorCreatedAt and cursorId must be provided together',
+      );
+    }
+
+    if (!query.cursorCreatedAt || !query.cursorId) {
+      return null;
+    }
+
+    const cursorDate = new Date(query.cursorCreatedAt);
+    if (Number.isNaN(cursorDate.getTime())) {
+      throw new BadRequestException('cursorCreatedAt must be a valid ISO date');
+    }
+    return {
+      createdAt: cursorDate.toISOString(),
+      id: query.cursorId,
+    };
+  }
+
+  private async fetchLatestScriptsByIdea(
+    ideaIds: string[],
+  ): Promise<Map<string, Script>> {
+    const latestScripts = await this.scriptsRepository
+      .createQueryBuilder('script')
+      .distinctOn(['script.ideaId'])
+      .where('script.ideaId IN (:...ideaIds)', { ideaIds })
+      .orderBy('script.ideaId', 'ASC')
+      .addOrderBy('script.createdAt', 'DESC')
+      .getMany();
+
+    return new Map(latestScripts.map((script) => [script.ideaId, script]));
+  }
+
+  private async fetchLatestCaptionsByIdea(
+    ideaIds: string[],
+  ): Promise<Map<string, Caption>> {
+    const latestCaptions = await this.captionsRepository
+      .createQueryBuilder('caption')
+      .distinctOn(['caption.ideaId'])
+      .where('caption.ideaId IN (:...ideaIds)', { ideaIds })
+      .orderBy('caption.ideaId', 'ASC')
+      .addOrderBy('caption.createdAt', 'DESC')
+      .getMany();
+
+    return new Map(latestCaptions.map((caption) => [caption.ideaId, caption]));
+  }
+
+  private async fetchScriptSucceededCountByIdea(
+    ideaIds: string[],
+  ): Promise<Map<string, number>> {
+    const rows = await this.scriptsRepository
+      .createQueryBuilder('script')
+      .select('script.ideaId', 'ideaId')
+      .addSelect('COUNT(*)::int', 'count')
+      .where('script.ideaId IN (:...ideaIds)', { ideaIds })
+      .andWhere('script.status = :status', {
+        status: GenerationStatus.SUCCEEDED,
+      })
+      .groupBy('script.ideaId')
+      .getRawMany<{ ideaId: string; count: string }>();
+
+    return new Map(rows.map((row) => [row.ideaId, Number(row.count) || 0]));
+  }
+
+  private async fetchCaptionSucceededCountByIdea(
+    ideaIds: string[],
+  ): Promise<Map<string, number>> {
+    const rows = await this.captionsRepository
+      .createQueryBuilder('caption')
+      .select('caption.ideaId', 'ideaId')
+      .addSelect('COUNT(*)::int', 'count')
+      .where('caption.ideaId IN (:...ideaIds)', { ideaIds })
+      .andWhere('caption.status = :status', {
+        status: GenerationStatus.SUCCEEDED,
+      })
+      .groupBy('caption.ideaId')
+      .getRawMany<{ ideaId: string; count: string }>();
+
+    return new Map(rows.map((row) => [row.ideaId, Number(row.count) || 0]));
+  }
+
+  private async fetchLatestAssetStatusesByIdea(ideaIds: string[]): Promise<{
+    imageStatusByIdea: Map<string, GenerationStatus>;
+    videoStatusByIdea: Map<string, GenerationStatus>;
+  }> {
+    const latestAssets = await this.assetsRepository
+      .createQueryBuilder('asset')
+      .distinctOn(['asset.ideaId', 'asset.type'])
+      .where('asset.ideaId IN (:...ideaIds)', { ideaIds })
+      .andWhere('asset.type IN (:...assetTypes)', {
+        assetTypes: [AssetType.IMAGE, AssetType.VIDEO],
+      })
+      .orderBy('asset.ideaId', 'ASC')
+      .addOrderBy('asset.type', 'ASC')
+      .addOrderBy('asset.createdAt', 'DESC')
+      .getMany();
+
+    const imageStatusByIdea = new Map<string, GenerationStatus>();
+    const videoStatusByIdea = new Map<string, GenerationStatus>();
+    for (const asset of latestAssets) {
+      if (asset.type === AssetType.IMAGE) {
+        imageStatusByIdea.set(asset.ideaId, asset.status);
         continue;
       }
       if (asset.type === AssetType.VIDEO) {
-        if (!latestVideoStatusByIdea.has(asset.ideaId)) {
-          latestVideoStatusByIdea.set(asset.ideaId, asset.status);
-        }
-        videoAssetsCountByIdea.set(
-          asset.ideaId,
-          (videoAssetsCountByIdea.get(asset.ideaId) ?? 0) + 1,
-        );
-        if (asset.status === GenerationStatus.SUCCEEDED) {
-          videoSucceededCountByIdea.set(
-            asset.ideaId,
-            (videoSucceededCountByIdea.get(asset.ideaId) ?? 0) + 1,
-          );
-          if (!currentVideosByIdea.has(asset.ideaId)) {
-            currentVideosByIdea.set(asset.ideaId, asset);
-          }
-        }
+        videoStatusByIdea.set(asset.ideaId, asset.status);
       }
     }
 
-    return ideas.map((idea) => ({
-      ...idea,
-      latestScript: latestScriptsByIdea.get(idea.id) ?? null,
-      latestCaption: latestCaptionsByIdea.get(idea.id) ?? null,
-      latestImage: currentImagesByIdea.get(idea.id) ?? null,
-      latestVideo: currentVideosByIdea.get(idea.id) ?? null,
-      latestImageStatus: latestImageStatusByIdea.get(idea.id) ?? null,
-      latestVideoStatus: latestVideoStatusByIdea.get(idea.id) ?? null,
-      scriptSucceededCount: scriptSucceededCountByIdea.get(idea.id) ?? 0,
-      captionSucceededCount: captionSucceededCountByIdea.get(idea.id) ?? 0,
-      imageAssetsCount: imageAssetsCountByIdea.get(idea.id) ?? 0,
-      videoAssetsCount: videoAssetsCountByIdea.get(idea.id) ?? 0,
-      imageSucceededCount: imageSucceededCountByIdea.get(idea.id) ?? 0,
-      videoSucceededCount: videoSucceededCountByIdea.get(idea.id) ?? 0,
-    }));
+    return { imageStatusByIdea, videoStatusByIdea };
+  }
+
+  private async fetchLatestSucceededAssetsByIdea(ideaIds: string[]): Promise<{
+    imageByIdea: Map<string, Asset>;
+    videoByIdea: Map<string, Asset>;
+  }> {
+    const latestSucceededAssets = await this.assetsRepository
+      .createQueryBuilder('asset')
+      .distinctOn(['asset.ideaId', 'asset.type'])
+      .where('asset.ideaId IN (:...ideaIds)', { ideaIds })
+      .andWhere('asset.type IN (:...assetTypes)', {
+        assetTypes: [AssetType.IMAGE, AssetType.VIDEO],
+      })
+      .andWhere('asset.status = :status', {
+        status: GenerationStatus.SUCCEEDED,
+      })
+      .orderBy('asset.ideaId', 'ASC')
+      .addOrderBy('asset.type', 'ASC')
+      .addOrderBy('asset.createdAt', 'DESC')
+      .getMany();
+
+    const imageByIdea = new Map<string, Asset>();
+    const videoByIdea = new Map<string, Asset>();
+    for (const asset of latestSucceededAssets) {
+      if (asset.type === AssetType.IMAGE) {
+        imageByIdea.set(asset.ideaId, asset);
+        continue;
+      }
+      if (asset.type === AssetType.VIDEO) {
+        videoByIdea.set(asset.ideaId, asset);
+      }
+    }
+
+    return { imageByIdea, videoByIdea };
+  }
+
+  private async fetchAssetCountsByIdea(ideaIds: string[]): Promise<
+    Map<
+      string,
+      {
+        imageAssetsCount: number;
+        videoAssetsCount: number;
+        imageSucceededCount: number;
+        videoSucceededCount: number;
+      }
+    >
+  > {
+    const rows = await this.assetsRepository
+      .createQueryBuilder('asset')
+      .select('asset.ideaId', 'ideaId')
+      .addSelect(
+        'SUM(CASE WHEN asset.type = :imageType THEN 1 ELSE 0 END)::int',
+        'imageAssetsCount',
+      )
+      .addSelect(
+        'SUM(CASE WHEN asset.type = :videoType THEN 1 ELSE 0 END)::int',
+        'videoAssetsCount',
+      )
+      .addSelect(
+        'SUM(CASE WHEN asset.type = :imageType AND asset.status = :succeededStatus THEN 1 ELSE 0 END)::int',
+        'imageSucceededCount',
+      )
+      .addSelect(
+        'SUM(CASE WHEN asset.type = :videoType AND asset.status = :succeededStatus THEN 1 ELSE 0 END)::int',
+        'videoSucceededCount',
+      )
+      .where('asset.ideaId IN (:...ideaIds)', { ideaIds })
+      .setParameters({
+        imageType: AssetType.IMAGE,
+        videoType: AssetType.VIDEO,
+        succeededStatus: GenerationStatus.SUCCEEDED,
+      })
+      .groupBy('asset.ideaId')
+      .getRawMany<{
+        ideaId: string;
+        imageAssetsCount: string;
+        videoAssetsCount: string;
+        imageSucceededCount: string;
+        videoSucceededCount: string;
+      }>();
+
+    return new Map(
+      rows.map((row) => [
+        row.ideaId,
+        {
+          imageAssetsCount: Number(row.imageAssetsCount) || 0,
+          videoAssetsCount: Number(row.videoAssetsCount) || 0,
+          imageSucceededCount: Number(row.imageSucceededCount) || 0,
+          videoSucceededCount: Number(row.videoSucceededCount) || 0,
+        },
+      ]),
+    );
   }
 
   async findOne(ideaId: string) {
@@ -689,13 +824,21 @@ STRICT OUTPUT CONTRACT:
       throw new NotFoundException('Asset not found');
     }
 
+    let fileRemoved = false;
     if (asset.url) {
-      await this.objectStorageService.removeByPublicUrl(asset.url);
+      fileRemoved = await this.objectStorageService.removeByPublicUrl(
+        asset.url,
+      );
     }
 
-    const result = await this.assetsRepository.delete({ id: assetId });
-    if (!result.affected) {
-      throw new NotFoundException('Asset not found');
+    try {
+      const result = await this.assetsRepository.delete({ id: assetId });
+      if (!result.affected) {
+        throw new NotFoundException('Asset not found');
+      }
+    } catch (error) {
+      await this.compensateAssetDeletionFailure(asset, fileRemoved);
+      throw error;
     }
 
     return { deleted: 1 };
@@ -715,45 +858,48 @@ STRICT OUTPUT CONTRACT:
     }
   }
 
-  private normalizeImagePrompt(data: { prompt?: unknown }): string {
-    if (typeof data.prompt !== 'string' || !data.prompt.trim()) {
-      throw new Error('LLM returned empty image prompt');
+  private async withIdeaLock<T>(
+    ideaId: string,
+    callback: (manager: EntityManager, idea: Idea) => Promise<T>,
+  ): Promise<T> {
+    return this.ideasRepository.manager.transaction(async (manager) => {
+      const idea = await manager.getRepository(Idea).findOne({
+        where: { id: ideaId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!idea) {
+        throw new NotFoundException('Idea not found');
+      }
+      return callback(manager, idea);
+    });
+  }
+
+  private async compensateAssetDeletionFailure(
+    asset: Asset,
+    fileRemoved: boolean,
+  ): Promise<void> {
+    if (!fileRemoved || !asset.url) {
+      return;
     }
-    return data.prompt.trim().slice(0, DEFAULT_IMAGE_MAX_PROMPT_CHARS);
+
+    try {
+      await this.assetsRepository.update(asset.id, {
+        url: null,
+        status: GenerationStatus.FAILED,
+        error:
+          'Asset file was removed but DB deletion failed. URL cleared by compensating cleanup.',
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Compensating cleanup failed for asset "${asset.id}": ${this.toErrorMessage(error)}`,
+      );
+    }
   }
 
   private toErrorMessage(error: unknown): string {
     if (error instanceof Error && error.message) {
       return error.message;
     }
-    return 'Unknown prompt generation error';
-  }
-
-  private shouldUseMockFallback(error: unknown, aiTestMode: boolean): boolean {
-    if (!aiTestMode) {
-      return false;
-    }
-    return this.toErrorMessage(error)
-      .toLowerCase()
-      .includes('is not configured for ai generation');
-  }
-
-  private extractErrorDetails(error: unknown): {
-    message: string;
-    code: string | null;
-    rawResponse: string | null;
-  } {
-    if (error instanceof LlmResponseError) {
-      return {
-        message: error.message,
-        code: error.code,
-        rawResponse: error.rawResponse,
-      };
-    }
-    return {
-      message: this.toErrorMessage(error),
-      code: null,
-      rawResponse: null,
-    };
+    return 'unknown error';
   }
 }

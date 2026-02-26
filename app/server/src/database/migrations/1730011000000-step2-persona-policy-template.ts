@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class Step2PersonaPolicyTemplate1730011000000
-  implements MigrationInterface
-{
+export class Step2PersonaPolicyTemplate1730011000000 implements MigrationInterface {
   name = 'Step2PersonaPolicyTemplate1730011000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

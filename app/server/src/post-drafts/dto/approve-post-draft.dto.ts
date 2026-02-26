@@ -7,4 +7,3 @@ export class ApprovePostDraftDto {
   @MaxLength(300)
   overrideReason?: string;
 }
-

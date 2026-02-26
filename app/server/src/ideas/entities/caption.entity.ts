@@ -34,4 +34,3 @@ export class Caption {
   @ManyToOne(() => Idea, (idea) => idea.captions, { onDelete: 'CASCADE' })
   idea!: Idea;
 }
-

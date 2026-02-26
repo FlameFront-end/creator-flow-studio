@@ -7,6 +7,8 @@ import { PolicyRule } from '../policy-rules/entities/policy-rule.entity';
 import { ModerationCheck } from './entities/moderation-check.entity';
 import { PostDraft } from './entities/post-draft.entity';
 import { PostDraftsController } from './post-drafts.controller';
+import { PostDraftsDataService } from './post-drafts-data.service';
+import { PostDraftsModerationService } from './post-drafts-moderation.service';
 import { PostDraftsService } from './post-drafts.service';
 
 @Module({
@@ -21,7 +23,10 @@ import { PostDraftsService } from './post-drafts.service';
     ]),
   ],
   controllers: [PostDraftsController],
-  providers: [PostDraftsService],
+  providers: [
+    PostDraftsService,
+    PostDraftsModerationService,
+    PostDraftsDataService,
+  ],
 })
 export class PostDraftsModule {}
-

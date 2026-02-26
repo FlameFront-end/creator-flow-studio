@@ -18,18 +18,15 @@ export class AiSettingsController {
   }
 
   @Put()
-  updateSettings(
-    @Body() dto: UpdateAiSettingsDto,
-    @Req() request: Request,
-  ) {
-    return this.aiSettingsService.updateSettings(dto, this.resolveUpdatedBy(request));
+  updateSettings(@Body() dto: UpdateAiSettingsDto, @Req() request: Request) {
+    return this.aiSettingsService.updateSettings(
+      dto,
+      this.resolveUpdatedBy(request),
+    );
   }
 
   @Post('test')
-  testConnection(
-    @Body() dto: TestAiSettingsDto,
-    @Req() request: Request,
-  ) {
+  testConnection(@Body() dto: TestAiSettingsDto, @Req() request: Request) {
     return this.aiSettingsConnectionTestService.testConnection(
       dto,
       this.resolveClientKey(request),
@@ -50,11 +47,11 @@ export class AiSettingsController {
   }
 
   private resolveClientKey(request: Request): string {
-    const authorization = request.headers.authorization ?? '';
-    const forwardedFor = request.headers['x-forwarded-for'];
-    const ip = Array.isArray(forwardedFor)
-      ? forwardedFor.join(',')
-      : forwardedFor ?? request.ip ?? 'unknown';
+    const authorization =
+      typeof request.headers.authorization === 'string'
+        ? request.headers.authorization.trim().slice(0, 256)
+        : '';
+    const ip = request.ip?.trim() || 'unknown';
     return `${authorization}|${ip}`;
   }
 }

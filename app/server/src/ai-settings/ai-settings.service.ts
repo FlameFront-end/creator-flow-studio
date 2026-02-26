@@ -122,7 +122,9 @@ export class AiSettingsService {
     return this.resolveRuntimeConfig(stored);
   }
 
-  async buildRuntimeConfigForTest(dto: TestAiSettingsDto): Promise<AiRuntimeConfig> {
+  async buildRuntimeConfigForTest(
+    dto: TestAiSettingsDto,
+  ): Promise<AiRuntimeConfig> {
     const runtime = await this.getRuntimeConfig();
     const provider = dto.provider
       ? this.normalizeProvider(dto.provider)
@@ -130,7 +132,9 @@ export class AiSettingsService {
     const model = dto.model
       ? this.normalizeRequiredModel(dto.model)
       : runtime.model;
-    const maxTokens = this.normalizeMaxTokens(dto.maxTokens ?? runtime.maxTokens);
+    const maxTokens = this.normalizeMaxTokens(
+      dto.maxTokens ?? runtime.maxTokens,
+    );
     const responseLanguage = this.normalizeResponseLanguage(
       dto.responseLanguage ?? runtime.responseLanguage,
     );
@@ -190,13 +194,15 @@ export class AiSettingsService {
       apiKey: decryptedKey || envFallback.apiKey,
       baseUrl:
         provider === 'openai-compatible'
-          ? this.normalizeCompatibleBaseUrlOrNull(stored.baseUrl) ??
-            envFallback.baseUrl
+          ? (this.normalizeCompatibleBaseUrlOrNull(stored.baseUrl) ??
+            envFallback.baseUrl)
           : null,
       responseLanguage: this.normalizeResponseLanguage(
         stored.responseLanguage ?? envFallback.responseLanguage,
       ),
-      maxTokens: this.normalizeMaxTokens(stored.maxTokens ?? envFallback.maxTokens),
+      maxTokens: this.normalizeMaxTokens(
+        stored.maxTokens ?? envFallback.maxTokens,
+      ),
       aiTestMode: stored.aiTestMode ?? envFallback.aiTestMode,
       source: 'database',
     };
@@ -367,9 +373,7 @@ export class AiSettingsService {
   }
 
   private stripChatCompletionsSuffix(value: string): string {
-    return value
-      .replace(/\/chat\/completions\/?$/i, '')
-      .replace(/\/+$/, '');
+    return value.replace(/\/chat\/completions\/?$/i, '').replace(/\/+$/, '');
   }
 
   private normalizeMaxTokens(value: number): number {

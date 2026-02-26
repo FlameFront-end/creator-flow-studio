@@ -5,6 +5,12 @@ import {
   LlmProvider,
 } from './llm-provider.interface';
 import { LlmResponseError } from './llm-response.error';
+import {
+  AI_HTTP_TIMEOUT_MS,
+  fetchWithTimeout,
+  isAbortError,
+  toErrorMessage,
+} from '../../common/network/fetch-with-timeout';
 
 type OpenAiChatCompletionResponse = {
   id: string;
@@ -48,30 +54,38 @@ export class OpenAiProvider implements LlmProvider {
       );
     }
 
-    const response = await fetch(this.endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        temperature,
-        max_tokens: maxTokens,
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Return a single valid JSON object only. No markdown, no prose, no extra keys.',
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetchWithTimeout(this.endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          temperature,
+          max_tokens: maxTokens,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Return a single valid JSON object only. No markdown, no prose, no extra keys.',
+            },
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+        }),
+      });
+    } catch (error) {
+      const message = isAbortError(error)
+        ? `OpenAI request timed out after ${AI_HTTP_TIMEOUT_MS}ms`
+        : `OpenAI request failed before response: ${toErrorMessage(error, 'unknown network error')}`;
+      throw new LlmResponseError(message, 'provider_request_failed');
+    }
 
     const payload = (await response.json()) as OpenAiChatCompletionResponse;
     if (!response.ok) {
@@ -84,9 +98,13 @@ export class OpenAiProvider implements LlmProvider {
 
     const content = payload.choices?.[0]?.message?.content?.trim();
     if (!content) {
-      throw new LlmResponseError('OpenAI response is empty or malformed', 'empty_response', {
-        rawResponse: JSON.stringify(payload),
-      });
+      throw new LlmResponseError(
+        'OpenAI response is empty or malformed',
+        'empty_response',
+        {
+          rawResponse: JSON.stringify(payload),
+        },
+      );
     }
 
     let parsed: T;

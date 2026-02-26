@@ -58,6 +58,17 @@ export type Idea = {
   videoSucceededCount?: number
 }
 
+export type IdeasPageCursor = {
+  createdAt: string
+  id: string
+}
+
+export type IdeasPageResponse = {
+  items: Idea[]
+  nextCursor: IdeasPageCursor | null
+  hasMore: boolean
+}
+
 export type IdeaDetails = Omit<Idea, 'latestScript' | 'latestCaption'> & {
   scripts: Script[]
   captions: Caption[]
@@ -179,11 +190,22 @@ export const ideasApi = {
     const { data } = await axiosInstance.post<GenerateImageResponse>(`/ideas/${ideaId}/videos/generate`, payload)
     return data
   },
-  async getIdeas(projectId: string): Promise<Idea[]> {
-    const { data } = await axiosInstance.get<Idea[]>('/ideas', {
-      params: { projectId },
+  async getIdeasPage(params: {
+    projectId: string
+    limit?: number
+    cursorCreatedAt?: string
+    cursorId?: string
+  }): Promise<IdeasPageResponse> {
+    const { data } = await axiosInstance.get<IdeasPageResponse>('/ideas', {
+      params,
     })
     return data
+  },
+  async getIdeas(projectId: string): Promise<Idea[]> {
+    const { data } = await axiosInstance.get<IdeasPageResponse>('/ideas', {
+      params: { projectId, limit: 100 },
+    })
+    return data.items
   },
   async getIdea(ideaId: string): Promise<IdeaDetails> {
     const { data } = await axiosInstance.get<IdeaDetails>(`/ideas/${ideaId}`)

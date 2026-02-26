@@ -4,4 +4,3 @@ export enum GenerationStatus {
   SUCCEEDED = 'succeeded',
   FAILED = 'failed',
 }
-

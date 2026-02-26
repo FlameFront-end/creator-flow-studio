@@ -1,11 +1,46 @@
 import { ConsoleLogger } from '@nestjs/common';
-import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
+import {
+  createWriteStream,
+  mkdirSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+  type WriteStream,
+} from 'node:fs';
 import { resolve } from 'node:path';
+
+const DEFAULT_LOG_RETENTION_DAYS = 14;
+const DEFAULT_LOG_MAX_DIR_SIZE_MB = 256;
+
+const toPositiveNumber = (
+  value: string | undefined,
+  fallback: number,
+): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+};
 
 const resolveLogsDir = (): string => {
   const fromEnv = process.env.APP_LOG_DIR?.trim();
   return fromEnv ? resolve(fromEnv) : resolve(process.cwd(), '.logs');
 };
+
+const resolveRetentionDays = (): number =>
+  toPositiveNumber(
+    process.env.APP_LOG_RETENTION_DAYS,
+    DEFAULT_LOG_RETENTION_DAYS,
+  );
+
+const resolveMaxDirSizeBytes = (): number =>
+  toPositiveNumber(
+    process.env.APP_LOG_MAX_DIR_SIZE_MB,
+    DEFAULT_LOG_MAX_DIR_SIZE_MB,
+  ) *
+  1024 *
+  1024;
 
 const resolveLogFilePath = (processName: string): string => {
   const logsDir = resolveLogsDir();
@@ -14,12 +49,74 @@ const resolveLogFilePath = (processName: string): string => {
   return resolve(logsDir, `${processName}-${date}.log`);
 };
 
+type LogFileEntry = {
+  path: string;
+  mtimeMs: number;
+  size: number;
+};
+
+const listLogFiles = (logsDir: string): LogFileEntry[] =>
+  readdirSync(logsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.log'))
+    .map((entry) => {
+      const path = resolve(logsDir, entry.name);
+      const stats = statSync(path);
+      return {
+        path,
+        mtimeMs: stats.mtimeMs,
+        size: stats.size,
+      };
+    });
+
+const cleanupLogsDirectory = (
+  logsDir: string,
+  activeFilePath: string,
+): void => {
+  const retentionMs = resolveRetentionDays() * 24 * 60 * 60 * 1000;
+  const maxDirSizeBytes = resolveMaxDirSizeBytes();
+  const now = Date.now();
+
+  try {
+    const existingFiles = listLogFiles(logsDir);
+    for (const file of existingFiles) {
+      if (file.path === activeFilePath) {
+        continue;
+      }
+      if (now - file.mtimeMs > retentionMs) {
+        unlinkSync(file.path);
+      }
+    }
+
+    const filesAfterRetention = listLogFiles(logsDir).sort(
+      (a, b) => a.mtimeMs - b.mtimeMs,
+    );
+    let totalSize = filesAfterRetention.reduce(
+      (sum, file) => sum + file.size,
+      0,
+    );
+    for (const file of filesAfterRetention) {
+      if (totalSize <= maxDirSizeBytes) {
+        break;
+      }
+      if (file.path === activeFilePath) {
+        continue;
+      }
+      unlinkSync(file.path);
+      totalSize -= file.size;
+    }
+  } catch {
+    // Cleanup failures should never break logger initialization.
+  }
+};
+
 export class AppLogger extends ConsoleLogger {
   private readonly stream: WriteStream;
 
   constructor(context: string, processName: string) {
     super(context, { timestamp: true });
-    this.stream = createWriteStream(resolveLogFilePath(processName), {
+    const logFilePath = resolveLogFilePath(processName);
+    cleanupLogsDirectory(resolveLogsDir(), logFilePath);
+    this.stream = createWriteStream(logFilePath, {
       flags: 'a',
       encoding: 'utf8',
     });

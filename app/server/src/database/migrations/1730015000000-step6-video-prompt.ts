@@ -24,6 +24,8 @@ export class Step6VideoPrompt1730015000000 implements MigrationInterface {
       DELETE FROM "prompt_templates"
       WHERE "key" = 'video_prompt'
     `);
-    await queryRunner.query(`ALTER TABLE "ideas" DROP COLUMN IF EXISTS "videoPrompt"`);
+    await queryRunner.query(
+      `ALTER TABLE "ideas" DROP COLUMN IF EXISTS "videoPrompt"`,
+    );
   }
 }

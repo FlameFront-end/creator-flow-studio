@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class Step9AiResponseLanguage1730018000000
-  implements MigrationInterface
-{
+export class Step9AiResponseLanguage1730018000000 implements MigrationInterface {
   name = 'Step9AiResponseLanguage1730018000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

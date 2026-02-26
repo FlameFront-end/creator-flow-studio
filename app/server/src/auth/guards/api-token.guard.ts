@@ -25,7 +25,9 @@ export class ApiTokenGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest<{ headers: Record<string, string | undefined> }>();
+    const request = context
+      .switchToHttp()
+      .getRequest<{ headers: Record<string, string | undefined> }>();
     const authorization = request.headers.authorization;
     const token = authorization?.startsWith('Bearer ')
       ? authorization.slice('Bearer '.length)

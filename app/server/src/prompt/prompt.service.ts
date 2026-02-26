@@ -59,13 +59,19 @@ export class PromptService {
     template: string,
     variables: Record<string, string | number | boolean>,
   ): string {
-    return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) =>
-      key in variables ? String(variables[key]) : `{{${key}}}`,
+    return template.replace(
+      /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g,
+      (_, key: string) =>
+        key in variables ? String(variables[key]) : `{{${key}}}`,
     );
   }
 
   private formatRules(
-    rules: { type: PolicyRuleType; severity: PolicyRuleSeverity; text: string }[],
+    rules: {
+      type: PolicyRuleType;
+      severity: PolicyRuleSeverity;
+      text: string;
+    }[],
     type: PolicyRuleType,
     severity: PolicyRuleSeverity,
   ): string {

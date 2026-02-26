@@ -1,4 +1,10 @@
-﻿import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+﻿import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Idea } from './idea.entity';
 import { GenerationStatus } from './generation-status.enum';
 

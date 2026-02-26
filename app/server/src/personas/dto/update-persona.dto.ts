@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import {
   IsInt,
   IsOptional,
@@ -7,6 +7,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpdatePersonaDto {
@@ -17,7 +18,16 @@ export class UpdatePersonaDto {
   name?: string;
 
   @IsOptional()
-  @Type(() => Number)
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === null || value === undefined) {
+      return value;
+    }
+    if (typeof value === 'string') {
+      return Number(value);
+    }
+    return value;
+  })
+  @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsInt()
   @Min(1)
   @Max(130)

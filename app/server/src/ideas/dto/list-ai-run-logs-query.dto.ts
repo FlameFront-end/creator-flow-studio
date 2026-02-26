@@ -17,4 +17,3 @@ export class ListAiRunLogsQueryDto {
   @Max(100)
   limit?: number;
 }
-
