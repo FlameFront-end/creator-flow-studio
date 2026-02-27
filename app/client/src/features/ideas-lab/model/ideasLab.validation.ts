@@ -8,8 +8,12 @@ type StartIdeasGenerationInput = {
   format: IdeaFormat
 }
 
+export type StartIdeasGenerationField = 'projectId' | 'personaId' | 'topic' | 'count'
+
+export type StartIdeasGenerationFieldErrors = Partial<Record<StartIdeasGenerationField, string>>
+
 type StartIdeasGenerationError = {
-  error: string
+  fieldErrors: StartIdeasGenerationFieldErrors
 }
 
 type StartIdeasGenerationPayload = {
@@ -25,18 +29,34 @@ export const validateStartIdeasGeneration = (
 ): StartIdeasGenerationError | StartIdeasGenerationPayload => {
   const parsedCount = Number(input.count)
   const trimmedTopic = input.topic.trim()
+  const fieldErrors: StartIdeasGenerationFieldErrors = {}
 
-  if (!input.projectId || !input.personaId || trimmedTopic.length < 3) {
-    return { error: 'Выберите проект, персонажа и заполните тему' }
+  if (!input.projectId) {
+    fieldErrors.projectId = 'Выберите проект'
+  }
+
+  if (!input.personaId) {
+    fieldErrors.personaId = 'Выберите персонажа'
+  }
+
+  if (trimmedTopic.length < 3) {
+    fieldErrors.topic = 'Укажите тему'
   }
 
   if (!Number.isFinite(parsedCount) || parsedCount < 1) {
-    return { error: 'Количество идей должно быть числом от 1' }
+    fieldErrors.count = 'Укажите количество идей'
   }
 
+  if (Object.keys(fieldErrors).length > 0) {
+    return { fieldErrors }
+  }
+
+  const projectId = input.projectId as string
+  const personaId = input.personaId as string
+
   return {
-    projectId: input.projectId,
-    personaId: input.personaId,
+    projectId,
+    personaId,
     topic: trimmedTopic,
     count: Math.floor(parsedCount),
     format: input.format,

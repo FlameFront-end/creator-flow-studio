@@ -13,6 +13,7 @@ export const IdeasGenerationPanel = ({
   onGenerationAccepted,
 }: IdeasGenerationPanelProps) => {
   const [awaitingAcceptance, setAwaitingAcceptance] = useState(false)
+  const fieldErrors = controller.generationFieldErrors
 
   useEffect(() => {
     if (!awaitingAcceptance) {
@@ -54,6 +55,10 @@ export const IdeasGenerationPanel = ({
             onChange={(value) => {
               controller.setProjectId(value)
               controller.setPersonaId(null)
+              if (value) {
+                controller.clearGenerationFieldError('projectId')
+              }
+              controller.clearGenerationFieldError('personaId')
             }}
             data={(controller.projectsQuery.data ?? []).map((project) => ({
               value: project.id,
@@ -61,11 +66,17 @@ export const IdeasGenerationPanel = ({
             }))}
             searchable
             placeholder="Выберите проект"
+            error={fieldErrors.projectId}
           />
           <Select
             label="Персонаж"
             value={controller.personaId}
-            onChange={controller.setPersonaId}
+            onChange={(value) => {
+              controller.setPersonaId(value)
+              if (value) {
+                controller.clearGenerationFieldError('personaId')
+              }
+            }}
             data={(controller.personasQuery.data ?? []).map((persona) => ({
               value: persona.id,
               label: persona.name,
@@ -74,6 +85,7 @@ export const IdeasGenerationPanel = ({
             placeholder={controller.projectId ? 'Выберите персонажа' : 'Сначала выберите проект'}
             disabled={!controller.projectId}
             nothingFoundMessage={controller.projectId ? 'Для проекта нет персонажей' : 'Сначала выберите проект'}
+            error={fieldErrors.personaId}
           />
           <Select
             label="Формат"
@@ -88,34 +100,50 @@ export const IdeasGenerationPanel = ({
           />
         </SimpleGrid>
 
-        <Textarea
-          label="Тема"
-          value={controller.topic}
-          onChange={(event) => controller.setTopic(event.currentTarget.value)}
-          minRows={2}
-          autosize
-        />
-
-        <Group justify="space-between" align="end">
-          <TextInput
-            label="Количество идей"
-            value={controller.count}
-            onChange={(event) => controller.setCount(event.currentTarget.value)}
-            w={260}
+        <Stack gap={0}>
+          <Textarea
+            label="Тема"
+            value={controller.topic}
+            onChange={(event) => {
+              const nextValue = event.currentTarget.value
+              controller.setTopic(nextValue)
+              if (nextValue.trim().length >= 3) {
+                controller.clearGenerationFieldError('topic')
+              }
+            }}
+            minRows={2}
+            autosize
+            error={fieldErrors.topic}
           />
-          <AppButton
-            buttonVariant="dark"
-            loading={controller.generateIdeasMutation.isPending}
-            onClick={handleStartGeneration}
-            disabled={!controller.projectId || !controller.personaId}
-          >
-            Сгенерировать идеи
-          </AppButton>
-        </Group>
+
+          <Group justify="space-between" align="end">
+            <TextInput
+              label="Количество идей"
+              value={controller.count}
+              onChange={(event) => {
+                const nextValue = event.currentTarget.value
+                controller.setCount(nextValue)
+                const parsedCount = Number(nextValue)
+                if (Number.isFinite(parsedCount) && parsedCount >= 1) {
+                  controller.clearGenerationFieldError('count')
+                }
+              }}
+              w={260}
+              error={fieldErrors.count}
+            />
+            <AppButton
+              buttonVariant="dark"
+              loading={controller.generateIdeasMutation.isPending}
+              onClick={handleStartGeneration}
+              disabled={controller.generateIdeasMutation.isPending}
+            >
+              Сгенерировать идеи
+            </AppButton>
+          </Group>
+        </Stack>
       </Stack>
     </Paper>
   )
 }
-
 
 

@@ -4,9 +4,10 @@ const AI_MODELS_BY_PROVIDER_STORAGE_KEY = 'prompt_studio_ai_models_by_provider_v
 export const AI_MODELS_BY_PROVIDER_UPDATED_EVENT = 'prompt_studio_ai_models_by_provider_updated'
 const MAX_MODELS_PER_PROVIDER = 12
 
-type PersistedModelsByProvider = Partial<Record<AiProvider, string[]>>
+export type PersistedModelsByProvider = Partial<Record<AiProvider, string[]>>
 
 const normalizeModel = (value: string): string => value.trim()
+const PROVIDERS: readonly AiProvider[] = ['openai', 'openrouter', 'openai-compatible'] as const
 
 export const readPersistedModelsByProvider = (): PersistedModelsByProvider => {
   if (typeof window === 'undefined') {
@@ -25,7 +26,7 @@ export const readPersistedModelsByProvider = (): PersistedModelsByProvider => {
     }
 
     const result: PersistedModelsByProvider = {}
-    for (const provider of ['openai', 'openrouter', 'openai-compatible'] as const) {
+    for (const provider of PROVIDERS) {
       const list = (parsed as Record<string, unknown>)[provider]
       if (!Array.isArray(list)) {
         continue
@@ -46,6 +47,29 @@ export const readPersistedModelsByProvider = (): PersistedModelsByProvider => {
   } catch {
     return {}
   }
+}
+
+export const mergePersistedModelsByProvider = (
+  incoming: PersistedModelsByProvider,
+): PersistedModelsByProvider => {
+  const current = readPersistedModelsByProvider()
+  const next: PersistedModelsByProvider = { ...current }
+
+  for (const provider of PROVIDERS) {
+    const merged = [
+      ...(incoming[provider] ?? []),
+      ...(current[provider] ?? []),
+    ]
+      .map(normalizeModel)
+      .filter(Boolean)
+
+    if (merged.length) {
+      next[provider] = Array.from(new Set(merged)).slice(0, MAX_MODELS_PER_PROVIDER)
+    }
+  }
+
+  writePersistedModelsByProvider(next)
+  return next
 }
 
 export const writePersistedModelsByProvider = (

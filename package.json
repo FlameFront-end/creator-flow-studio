@@ -5,6 +5,7 @@
   "scripts": {
     "dev:infra": "docker compose up -d postgres redis",
     "dev:migrate": "npm --prefix app/server run migration:run",
+    "migration:run:prod": "docker compose run --rm server node ./node_modules/typeorm/cli.js -d dist/database/data-source.js migration:run",
     "dev:apps": "concurrently -n server,worker,client -c cyan,magenta,green \"npm --prefix app/server run start:dev\" \"npm --prefix app/server run start:worker\" \"npm --prefix app/client run dev\"",
     "dev": "npm run dev:infra && npm run dev:migrate && npm run dev:apps",
     "build": "npm --prefix app/server run build && npm --prefix app/client run build"

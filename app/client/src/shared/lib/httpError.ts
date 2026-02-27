@@ -6,6 +6,8 @@ type ApiErrorShape = {
 }
 
 const EXACT_ERROR_TRANSLATIONS: Record<string, string> = {
+  'Internal server error': 'Внутренняя ошибка сервера',
+  'Internal Server Error': 'Внутренняя ошибка сервера',
   'Invalid credentials': 'Неверные учетные данные',
   'User already exists': 'Пользователь с таким email уже существует',
   'Invalid or expired access token': 'Токен доступа недействителен или истек',
@@ -60,10 +62,35 @@ const EXACT_ERROR_TRANSLATIONS: Record<string, string> = {
     'Для openai-compatible необходимо указать API ключ',
   'Too many AI connection test requests. Try again in one minute.':
     'Слишком много проверок подключения. Повторите через минуту',
+  'AI connection test failed': 'Не удалось выполнить проверку подключения к ИИ',
+  'AI connection test rate limiter is temporarily unavailable.':
+    'Сервис ограничения запросов для проверки ИИ временно недоступен',
+  'Auth rate limiter is temporarily unavailable.':
+    'Сервис ограничения запросов авторизации временно недоступен',
   'AI connection test returned an empty response':
     'Проверка подключения вернула пустой ответ',
   'AI provider timed out. Please try again in a moment.':
     'Модель долго не отвечает. Попробуйте ещё раз через несколько секунд',
+  'OPENAI_API_KEY is not configured for AI generation':
+    'API-ключ OpenAI не настроен для генерации ИИ',
+  'OPENROUTER_API_KEY is not configured for AI generation':
+    'API-ключ OpenRouter не настроен для генерации ИИ',
+  'LLM_MODEL is not configured for AI generation':
+    'Модель LLM не настроена для генерации ИИ',
+  'LLM_BASE_URL is not configured for AI generation':
+    'Base URL LLM не настроен для генерации ИИ',
+  'OpenAI response is empty or malformed':
+    'Ответ OpenAI пустой или некорректного формата',
+  'OpenAI returned invalid JSON payload':
+    'OpenAI вернул некорректный JSON',
+  'OpenRouter response is empty or malformed':
+    'Ответ OpenRouter пустой или некорректного формата',
+  'OpenRouter returned invalid JSON payload':
+    'OpenRouter вернул некорректный JSON',
+  'OpenAI-compatible response is empty or malformed':
+    'Ответ OpenAI-compatible провайдера пустой или некорректного формата',
+  'OpenAI-compatible provider returned invalid JSON payload':
+    'OpenAI-compatible провайдер вернул некорректный JSON',
 }
 
 const translateErrorMessage = (message: string): string => {
@@ -102,6 +129,11 @@ const translateErrorMessage = (message: string): string => {
     if (kind === 'caption') return `Подпись "${id}" не найдена`
     if (kind === 'asset') return `Ассет "${id}" не найден`
     return `Шаблон "${id}" не найден`
+  }
+
+  const unavailableModelMatch = normalized.match(/^Requested model "(.+)" is unavailable\.$/i)
+  if (unavailableModelMatch) {
+    return `Запрошенная модель "${unavailableModelMatch[1]}" недоступна`
   }
 
   if (/environment variable is required$/i.test(normalized)) {

@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AiSettingsCryptoService } from './ai-settings-crypto.service';
 import {
+  AiModelProfileView,
   AiProviderName,
   AiRuntimeConfig,
   AiSettingsView,
@@ -13,6 +14,8 @@ import {
 } from './ai-settings.types';
 import { UpdateAiSettingsDto } from './dto/update-ai-settings.dto';
 import { TestAiSettingsDto } from './dto/test-ai-settings.dto';
+import { DeleteSavedModelDto } from './dto/delete-saved-model.dto';
+import { AiProviderModel } from './entities/ai-provider-model.entity';
 import { AiProviderSettings } from './entities/ai-provider-settings.entity';
 
 const GLOBAL_SETTINGS_SCOPE_KEY = 'global';
@@ -24,30 +27,15 @@ export class AiSettingsService {
   constructor(
     @InjectRepository(AiProviderSettings)
     private readonly aiProviderSettingsRepository: Repository<AiProviderSettings>,
+    @InjectRepository(AiProviderModel)
+    private readonly aiProviderModelRepository: Repository<AiProviderModel>,
     private readonly aiSettingsCryptoService: AiSettingsCryptoService,
   ) {}
 
   async getPublicSettings(): Promise<AiSettingsView> {
-    const stored = await this.findStoredSettings();
-    const runtime = this.resolveRuntimeConfig(stored);
-    const hasApiKey = Boolean(runtime.apiKey.trim());
-
-    return {
-      provider: runtime.provider,
-      model: runtime.model,
-      baseUrl: runtime.baseUrl,
-      responseLanguage: runtime.responseLanguage,
-      maxTokens: runtime.maxTokens,
-      aiTestMode: runtime.aiTestMode,
-      isEnabled: stored?.isEnabled ?? false,
-      source: runtime.source,
-      hasApiKey,
-      apiKeyMasked: hasApiKey
-        ? this.aiSettingsCryptoService.maskSecret(runtime.apiKey)
-        : null,
-      updatedAt: stored?.updatedAt?.toISOString() ?? null,
-      updatedBy: stored?.updatedBy ?? null,
-    };
+    const models = await this.resolveModelProfiles();
+    const activeModelId = models.find((item) => item.active)?.id ?? null;
+    return { models, activeModelId };
   }
 
   async updateSettings(
@@ -57,30 +45,40 @@ export class AiSettingsService {
     const stored = await this.findStoredSettings();
     const provider = this.normalizeProvider(dto.provider);
     const model = this.normalizeRequiredModel(dto.model);
+    const existingProfile = await this.findSavedModel(provider, model);
     const nextMaxTokens = this.normalizeMaxTokens(
-      dto.maxTokens ?? stored?.maxTokens ?? this.resolveEnvMaxTokens(),
+      dto.maxTokens ??
+        existingProfile?.maxTokens ??
+        stored?.maxTokens ??
+        this.resolveEnvMaxTokens(),
     );
     const nextResponseLanguage = this.normalizeResponseLanguage(
       dto.responseLanguage ??
+        existingProfile?.responseLanguage ??
         stored?.responseLanguage ??
         this.resolveEnvResponseLanguage(),
     );
     const nextAiTestMode =
       dto.aiTestMode ?? stored?.aiTestMode ?? this.resolveEnvAiTestMode();
-    const nextIsEnabled = dto.isEnabled ?? stored?.isEnabled ?? true;
+    const nextIsEnabled =
+      dto.isEnabled ?? existingProfile?.isEnabled ?? stored?.isEnabled ?? true;
 
     const persistedKey = this.decryptStoredKey(stored?.apiKeyEncrypted ?? null);
+    const profileKey = this.decryptStoredKey(
+      existingProfile?.apiKeyEncrypted ?? null,
+    );
     const providedApiKey = this.normalizeOptionalText(dto.apiKey);
     const apiKey = dto.clearApiKey
       ? ''
       : providedApiKey !== null
         ? providedApiKey
-        : persistedKey;
+        : profileKey || persistedKey;
 
     const baseUrl =
       provider === 'openai-compatible'
         ? this.requireNormalizedCompatibleBaseUrl(
             this.normalizeOptionalText(dto.baseUrl) ??
+              existingProfile?.baseUrl ??
               stored?.baseUrl ??
               this.resolveEnvCompatibleBaseUrl(),
           )
@@ -108,6 +106,18 @@ export class AiSettingsService {
       : null;
 
     await this.aiProviderSettingsRepository.save(entity);
+    const savedProfile = await this.upsertSavedModelProfile({
+      existing: existingProfile,
+      provider,
+      model,
+      baseUrl,
+      responseLanguage: nextResponseLanguage,
+      maxTokens: nextMaxTokens,
+      isEnabled: nextIsEnabled,
+      apiKeyEncrypted: entity.apiKeyEncrypted,
+      updatedBy: entity.updatedBy,
+    });
+    await this.setActiveModel(savedProfile.id);
     return this.getPublicSettings();
   }
 
@@ -115,6 +125,43 @@ export class AiSettingsService {
     await this.aiProviderSettingsRepository.delete({
       scopeKey: GLOBAL_SETTINGS_SCOPE_KEY,
     });
+    await this.aiProviderModelRepository.update(
+      { scopeKey: GLOBAL_SETTINGS_SCOPE_KEY, isActive: true },
+      { isActive: false },
+    );
+    return this.getPublicSettings();
+  }
+
+  async removeSavedModel(dto: DeleteSavedModelDto): Promise<AiSettingsView> {
+    const provider = this.normalizeProvider(dto.provider);
+    const model = this.normalizeRequiredModel(dto.model);
+    const target = await this.findSavedModel(provider, model);
+    if (!target) {
+      return this.getPublicSettings();
+    }
+
+    await this.aiProviderModelRepository.delete({
+      scopeKey: GLOBAL_SETTINGS_SCOPE_KEY,
+      provider,
+      model,
+    });
+
+    if (target.isActive) {
+      const fallback = await this.aiProviderModelRepository.findOne({
+        where: { scopeKey: GLOBAL_SETTINGS_SCOPE_KEY },
+        order: { updatedAt: 'DESC', createdAt: 'DESC' },
+      });
+
+      if (!fallback) {
+        await this.aiProviderSettingsRepository.delete({
+          scopeKey: GLOBAL_SETTINGS_SCOPE_KEY,
+        });
+      } else {
+        await this.setActiveModel(fallback.id);
+        await this.syncActiveSettingsFromProfile(fallback);
+      }
+    }
+
     return this.getPublicSettings();
   }
 
@@ -176,6 +223,155 @@ export class AiSettingsService {
     return this.aiProviderSettingsRepository.findOneBy({
       scopeKey: GLOBAL_SETTINGS_SCOPE_KEY,
     });
+  }
+
+  private async resolveModelProfiles(): Promise<AiModelProfileView[]> {
+    const rows = await this.aiProviderModelRepository.find({
+      where: { scopeKey: GLOBAL_SETTINGS_SCOPE_KEY },
+      order: { isActive: 'DESC', updatedAt: 'DESC', createdAt: 'DESC' },
+      take: 64,
+    });
+
+    const result: AiModelProfileView[] = [];
+    for (const row of rows) {
+      const profile = this.toModelProfileView(row);
+      if (profile) {
+        result.push(profile);
+      }
+    }
+    return result;
+  }
+
+  private async findSavedModel(
+    provider: AiProviderName,
+    model: string,
+  ): Promise<AiProviderModel | null> {
+    return this.aiProviderModelRepository.findOneBy({
+      scopeKey: GLOBAL_SETTINGS_SCOPE_KEY,
+      provider,
+      model,
+    });
+  }
+
+  private async upsertSavedModelProfile(params: {
+    existing: AiProviderModel | null;
+    provider: AiProviderName;
+    model: string;
+    baseUrl: string | null;
+    responseLanguage: string;
+    maxTokens: number;
+    isEnabled: boolean;
+    apiKeyEncrypted: string | null;
+    updatedBy: string | null;
+  }): Promise<AiProviderModel> {
+    const entity = params.existing ?? this.aiProviderModelRepository.create();
+    entity.scopeKey = GLOBAL_SETTINGS_SCOPE_KEY;
+    entity.provider = params.provider;
+    entity.model = params.model;
+    entity.baseUrl = params.baseUrl;
+    entity.responseLanguage = params.responseLanguage;
+    entity.maxTokens = params.maxTokens;
+    entity.isEnabled = params.isEnabled;
+    entity.apiKeyEncrypted = params.apiKeyEncrypted;
+    entity.updatedBy = params.updatedBy;
+
+    return this.aiProviderModelRepository.save(entity);
+  }
+
+  private async setActiveModel(modelId: string): Promise<void> {
+    await this.aiProviderModelRepository.update(
+      { scopeKey: GLOBAL_SETTINGS_SCOPE_KEY, isActive: true },
+      { isActive: false },
+    );
+    await this.aiProviderModelRepository.update(
+      { scopeKey: GLOBAL_SETTINGS_SCOPE_KEY, id: modelId },
+      { isActive: true },
+    );
+  }
+
+  private async syncActiveSettingsFromProfile(
+    profile: AiProviderModel,
+  ): Promise<void> {
+    const provider = this.normalizeProvider(profile.provider);
+    const model = this.normalizeRequiredModel(profile.model);
+    const stored = await this.findStoredSettings();
+    const maxTokens = this.normalizeMaxTokens(
+      profile.maxTokens ?? stored?.maxTokens ?? this.resolveEnvMaxTokens(),
+    );
+    const responseLanguage = this.normalizeResponseLanguage(
+      profile.responseLanguage ??
+        stored?.responseLanguage ??
+        this.resolveEnvResponseLanguage(),
+    );
+    const aiTestMode = stored?.aiTestMode ?? this.resolveEnvAiTestMode();
+    const baseUrl =
+      provider === 'openai-compatible'
+        ? this.requireNormalizedCompatibleBaseUrl(
+            profile.baseUrl ??
+              stored?.baseUrl ??
+              this.resolveEnvCompatibleBaseUrl(),
+          )
+        : null;
+    const apiKey = this.decryptStoredKey(profile.apiKeyEncrypted);
+
+    this.assertProviderConfig({
+      provider,
+      model,
+      apiKey,
+      baseUrl,
+    });
+
+    const entity = stored ?? this.aiProviderSettingsRepository.create();
+    entity.scopeKey = GLOBAL_SETTINGS_SCOPE_KEY;
+    entity.provider = provider;
+    entity.model = model;
+    entity.baseUrl = baseUrl;
+    entity.responseLanguage = responseLanguage;
+    entity.maxTokens = maxTokens;
+    entity.aiTestMode = aiTestMode;
+    entity.isEnabled = profile.isEnabled;
+    entity.updatedBy = profile.updatedBy;
+    entity.apiKeyEncrypted = profile.apiKeyEncrypted;
+    await this.aiProviderSettingsRepository.save(entity);
+  }
+
+  private toModelProfileView(row: AiProviderModel): AiModelProfileView | null {
+    let provider: AiProviderName;
+    try {
+      provider = this.normalizeProvider(row.provider);
+    } catch {
+      return null;
+    }
+
+    const model = this.normalizeOptionalText(row.model);
+    if (!model) {
+      return null;
+    }
+
+    const decryptedKey = this.decryptStoredKey(row.apiKeyEncrypted);
+    const hasApiKey = Boolean(decryptedKey.trim());
+
+    return {
+      id: row.id,
+      provider,
+      model: model.slice(0, 255),
+      baseUrl:
+        provider === 'openai-compatible'
+          ? this.normalizeCompatibleBaseUrlOrNull(row.baseUrl)
+          : null,
+      responseLanguage: this.normalizeResponseLanguage(row.responseLanguage),
+      maxTokens: this.normalizeMaxTokens(
+        row.maxTokens ?? this.resolveEnvMaxTokens(),
+      ),
+      isEnabled: row.isEnabled ?? true,
+      hasApiKey,
+      apiKeyMasked: hasApiKey
+        ? this.aiSettingsCryptoService.maskSecret(decryptedKey)
+        : null,
+      updatedAt: row.updatedAt?.toISOString() ?? null,
+      updatedBy: row.updatedBy ?? null,
+      active: row.isActive ?? false,
+    };
   }
 
   private resolveRuntimeConfig(

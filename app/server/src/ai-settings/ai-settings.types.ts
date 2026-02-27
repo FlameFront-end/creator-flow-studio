@@ -23,19 +23,24 @@ export type AiRuntimeConfig = {
   source: AiSettingsSource;
 };
 
-export type AiSettingsView = {
+export type AiModelProfileView = {
+  id: string;
   provider: AiProviderName;
   model: string;
   baseUrl: string | null;
   responseLanguage: string;
   maxTokens: number;
-  aiTestMode: boolean;
   isEnabled: boolean;
-  source: AiSettingsSource;
   hasApiKey: boolean;
   apiKeyMasked: string | null;
   updatedAt: string | null;
   updatedBy: string | null;
+  active: boolean;
+};
+
+export type AiSettingsView = {
+  models: AiModelProfileView[];
+  activeModelId: string | null;
 };
 
 export type AiConnectionTestResult = {

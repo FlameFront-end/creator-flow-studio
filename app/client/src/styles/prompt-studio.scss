@@ -82,6 +82,38 @@
 }
 
 .ai-provider-settings {
+  .ai-provider-loading {
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    background: rgba(8, 11, 18, 0.78);
+  }
+
+  .ai-provider-loading-grid {
+    margin-top: 12px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .ai-provider-loading-line {
+    height: 10px;
+    border-radius: 999px;
+    background: linear-gradient(
+      90deg,
+      rgba(148, 163, 184, 0.16) 0%,
+      rgba(148, 163, 184, 0.3) 50%,
+      rgba(148, 163, 184, 0.16) 100%
+    );
+    background-size: 220% 100%;
+    animation: ai-provider-loading-shimmer 1.25s linear infinite;
+  }
+
+  .ai-provider-loading-line-wide {
+    width: 100%;
+  }
+
+  .ai-provider-loading-line-short {
+    width: 68%;
+  }
+
   .ai-provider-hero {
     border: 1px solid rgba(148, 163, 184, 0.22);
     background:
@@ -171,6 +203,8 @@
   .ai-provider-inline-field-action .ai-provider-recommend-btn {
     height: 42px;
     min-height: 42px;
+    align-self: flex-end;
+    margin-bottom: 0;
     padding-inline: 16px;
     white-space: nowrap;
   }
@@ -243,6 +277,21 @@
   }
 
   .ai-provider-settings {
+    .ai-provider-loading {
+      border-color: rgba(148, 163, 184, 0.34);
+      background: rgba(248, 250, 252, 0.82);
+    }
+
+    .ai-provider-loading-line {
+      background: linear-gradient(
+        90deg,
+        rgba(148, 163, 184, 0.26) 0%,
+        rgba(148, 163, 184, 0.44) 50%,
+        rgba(148, 163, 184, 0.26) 100%
+      );
+      background-size: 220% 100%;
+    }
+
     .ai-provider-hero {
       border-color: rgba(148, 163, 184, 0.35);
       background:
@@ -295,6 +344,15 @@
   .studio-tab-alert-dot {
     background: rgba(220, 38, 38, 0.9);
     box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.12);
+  }
+}
+
+@keyframes ai-provider-loading-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -20% 0;
   }
 }
 

@@ -81,8 +81,15 @@ function FieldRoot({
           {description}
         </div>
       ) : null}
-      {error ? (
-        <div className="appui-Input-error" style={{ marginTop: '6px', fontSize: '0.82rem', color: '#ef4444' }}>
+      {error !== undefined &&
+      error !== null &&
+      error !== false &&
+      error !== true &&
+      error !== '' ? (
+        <div
+          className="appui-Input-error"
+          style={{ marginTop: '4px', fontSize: '0.82rem', lineHeight: 1.25, color: '#ef4444' }}
+        >
           {error}
         </div>
       ) : null}

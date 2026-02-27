@@ -27,6 +27,9 @@ import { User } from '../auth/entities/user.entity';
 import { Step11UsersAuth1730020000000 } from './migrations/1730020000000-step11-users-auth';
 import { Step12IdeasListPerformanceIndexes1730021000000 } from './migrations/1730021000000-step12-ideas-list-performance-indexes';
 import { Step13PromptStudioContextScoping1730022000000 } from './migrations/1730022000000-step13-prompt-studio-context-scoping';
+import { AiProviderModel } from '../ai-settings/entities/ai-provider-model.entity';
+import { Step14AiProviderModelLibrary1730023000000 } from './migrations/1730023000000-step14-ai-provider-model-library';
+import { Step15AiProviderModelProfiles1730024000000 } from './migrations/1730024000000-step15-ai-provider-model-profiles';
 
 loadEnv({
   path: resolve(__dirname, '../../.env'),
@@ -57,6 +60,7 @@ export const buildTypeOrmOptions = (): DataSourceOptions => ({
     PostDraft,
     ModerationCheck,
     AiProviderSettings,
+    AiProviderModel,
     User,
   ],
   migrations: [
@@ -73,6 +77,8 @@ export const buildTypeOrmOptions = (): DataSourceOptions => ({
     Step11UsersAuth1730020000000,
     Step12IdeasListPerformanceIndexes1730021000000,
     Step13PromptStudioContextScoping1730022000000,
+    Step14AiProviderModelLibrary1730023000000,
+    Step15AiProviderModelProfiles1730024000000,
   ],
   synchronize: false,
   migrationsRun: false,

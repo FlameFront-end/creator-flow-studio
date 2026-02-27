@@ -1,6 +1,7 @@
 import { Group, Loader, Paper, Stack, Text, Title } from '@ui/core'
 import { AppButton } from '../../../../shared/components/AppButton'
 import { useEffect, useMemo, useState } from 'react'
+import { AppInlineErrorAlert } from '../../../../shared/components/AppInlineErrorAlert'
 import { TransientErrorAlert } from '../../../../shared/components/TransientErrorAlert'
 import { getErrorMessage } from '../../../../shared/lib/httpError'
 import type { IdeasLabController } from '../../hooks/useIdeasLabController'
@@ -26,6 +27,8 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
     return Math.min(8, Math.max(1, Math.floor(parsed)))
   }, [controller.count])
   const showClearIdeasButton = Boolean(controller.projectId) && hasIdeas
+  const showIdeasGenerationError =
+    !hasIdeas && !controller.isWaitingForIdeas && Boolean(controller.ideasGenerationError)
   const [transientError, setTransientError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -127,6 +130,12 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
             </AppButton>
           ) : null}
         </Group>
+
+        {showIdeasGenerationError ? (
+          <AppInlineErrorAlert title="Не удалось сгенерировать идеи">
+            {controller.ideasGenerationError}
+          </AppInlineErrorAlert>
+        ) : null}
 
         {!hasIdeas ? (
           showIdeasSkeletons ? (

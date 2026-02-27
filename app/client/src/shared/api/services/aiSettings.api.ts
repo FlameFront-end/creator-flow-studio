@@ -1,21 +1,25 @@
 import { axiosInstance } from '../axiosInstance'
 
 export type AiProvider = 'openai' | 'openrouter' | 'openai-compatible'
-export type AiSettingsSource = 'env' | 'database'
 
-export type AiSettings = {
+export type AiModelProfile = {
+  id: string
   provider: AiProvider
   model: string
   baseUrl: string | null
   responseLanguage: string
   maxTokens: number
-  aiTestMode: boolean
   isEnabled: boolean
-  source: AiSettingsSource
   hasApiKey: boolean
   apiKeyMasked: string | null
   updatedAt: string | null
   updatedBy: string | null
+  active: boolean
+}
+
+export type AiSettings = {
+  models: AiModelProfile[]
+  activeModelId: string | null
 }
 
 export type UpdateAiSettingsRequest = {
@@ -41,12 +45,16 @@ export type TestAiSettingsRequest = {
   clearApiKey?: boolean
 }
 
+export type DeleteSavedModelRequest = {
+  provider: AiProvider
+  model: string
+}
+
 export type TestAiSettingsResponse = {
   ok: true
   provider: AiProvider
   model: string
   latencyMs: number
-  source: AiSettingsSource
 }
 
 export const aiSettingsApi = {
@@ -64,6 +72,10 @@ export const aiSettingsApi = {
   },
   async resetAiSettings(): Promise<AiSettings> {
     const { data } = await axiosInstance.delete<AiSettings>('/settings/ai')
+    return data
+  },
+  async removeSavedModel(payload: DeleteSavedModelRequest): Promise<AiSettings> {
+    const { data } = await axiosInstance.delete<AiSettings>('/settings/ai/models', { data: payload })
     return data
   },
 }

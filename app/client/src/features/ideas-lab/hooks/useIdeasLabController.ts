@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { ideasApi, type Idea, type IdeaFormat } from '../../../shared/api/services/ideas.api'
 import { personasApi } from '../../../shared/api/services/personas.api'
 import { projectsApi } from '../../../shared/api/services/projects.api'
-import { showErrorToast, showValidationToast } from '../../../shared/lib/toast'
+import { getErrorMessage } from '../../../shared/lib/httpError'
+import { showErrorToast } from '../../../shared/lib/toast'
 import {
   PERSONAS_QUERY_KEY,
   PROJECTS_QUERY_KEY,
@@ -20,7 +21,11 @@ import {
   writePersistedSelectedIdeaByProject,
 } from '../model/ideasLab.storage'
 import { getIdeasLogsStats } from '../model/ideasLab.logs'
-import { validateStartIdeasGeneration } from '../model/ideasLab.validation'
+import {
+  type StartIdeasGenerationField,
+  type StartIdeasGenerationFieldErrors,
+  validateStartIdeasGeneration,
+} from '../model/ideasLab.validation'
 
 const isActiveStatus = (status: string | null | undefined): boolean =>
   status === 'queued' || status === 'running'
@@ -50,6 +55,8 @@ export const useIdeasLabController = () => {
   const [isWaitingForIdeas, setIsWaitingForIdeas] = useState(false)
   const [ideasGenerationBaselineLogIds, setIdeasGenerationBaselineLogIds] = useState<string[] | null>(null)
   const [ideasGenerationBaselineIdeasCount, setIdeasGenerationBaselineIdeasCount] = useState<number | null>(null)
+  const [ideasGenerationError, setIdeasGenerationError] = useState<string | null>(null)
+  const [generationFieldErrors, setGenerationFieldErrors] = useState<StartIdeasGenerationFieldErrors>({})
 
   const projectsQuery = useQuery({ queryKey: PROJECTS_QUERY_KEY, queryFn: projectsApi.getProjects })
   const personasQuery = useQuery({
@@ -113,6 +120,7 @@ export const useIdeasLabController = () => {
     setIsWaitingForIdeas(false)
     setIdeasGenerationBaselineLogIds(null)
     setIdeasGenerationBaselineIdeasCount(null)
+    setIdeasGenerationError(null)
   }, [ideasGenerationBaselineIdeasCount, isWaitingForIdeas, ideasQuery.data])
 
   useEffect(() => {
@@ -121,7 +129,7 @@ export const useIdeasLabController = () => {
     }
 
     const baselineLogIds = new Set(ideasGenerationBaselineLogIds)
-    const hasFinalLogForCurrentRequest = logsQuery.data.some((log) => {
+    const finalLogForCurrentRequest = logsQuery.data.find((log) => {
       if (log.operation !== 'ideas') {
         return false
       }
@@ -131,14 +139,23 @@ export const useIdeasLabController = () => {
       return log.status === 'failed' || log.status === 'succeeded'
     })
 
-    if (!hasFinalLogForCurrentRequest) {
+    if (!finalLogForCurrentRequest) {
       return
     }
 
     setIsWaitingForIdeas(false)
     setIdeasGenerationBaselineLogIds(null)
     setIdeasGenerationBaselineIdeasCount(null)
+    if (finalLogForCurrentRequest.status === 'failed') {
+      setIdeasGenerationError(finalLogForCurrentRequest.error || 'Не удалось сгенерировать идеи')
+      return
+    }
+    setIdeasGenerationError(null)
   }, [ideasGenerationBaselineLogIds, isWaitingForIdeas, logsQuery.data])
+
+  useEffect(() => {
+    setIdeasGenerationError(null)
+  }, [projectId])
 
   useEffect(() => {
     const ideas = ideasQuery.data ?? []
@@ -222,6 +239,7 @@ export const useIdeasLabController = () => {
       setIsWaitingForIdeas(false)
       setIdeasGenerationBaselineLogIds(null)
       setIdeasGenerationBaselineIdeasCount(null)
+      setIdeasGenerationError(getErrorMessage(error, 'Не удалось сгенерировать идеи'))
       showErrorToast(error, 'Не удалось поставить задачу в очередь')
     },
   })
@@ -351,11 +369,13 @@ export const useIdeasLabController = () => {
       count,
       format,
     })
-    if ('error' in validated) {
-      showValidationToast(validated.error)
+    if ('fieldErrors' in validated) {
+      setGenerationFieldErrors(validated.fieldErrors)
       return false
     }
 
+    setGenerationFieldErrors({})
+    setIdeasGenerationError(null)
     generateIdeasMutation.mutate(validated)
     setIdeasGenerationBaselineLogIds(
       (logsQuery.data ?? []).filter((log) => log.operation === 'ideas').map((log) => log.id),
@@ -378,6 +398,16 @@ export const useIdeasLabController = () => {
     setCount,
     format,
     setFormat,
+    generationFieldErrors,
+    clearGenerationFieldError: (field: StartIdeasGenerationField) =>
+      setGenerationFieldErrors((current) => {
+        if (!current[field]) {
+          return current
+        }
+        const next = { ...current }
+        delete next[field]
+        return next
+      }),
     clearIdeasModalOpen,
     setClearIdeasModalOpen,
     clearLogsModalOpen,
@@ -389,6 +419,7 @@ export const useIdeasLabController = () => {
     isLogsCollapsed,
     setIsLogsCollapsed,
     isWaitingForIdeas,
+    ideasGenerationError,
     projectsQuery,
     personasQuery,
     ideasQuery,

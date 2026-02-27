@@ -123,27 +123,51 @@ export class AppLogger extends ConsoleLogger {
   }
 
   override log(message: unknown, context?: string): void {
-    super.log(message, context);
+    if (context === undefined) {
+      super.log(message);
+    } else {
+      super.log(message, context);
+    }
     this.writeLine('LOG', message, context);
   }
 
   override error(message: unknown, stack?: string, context?: string): void {
-    super.error(message, stack, context);
+    if (stack === undefined && context === undefined) {
+      super.error(message);
+    } else if (stack === undefined) {
+      super.error(message, context);
+    } else if (context === undefined) {
+      super.error(message, stack);
+    } else {
+      super.error(message, stack, context);
+    }
     this.writeLine('ERROR', message, context, stack);
   }
 
   override warn(message: unknown, context?: string): void {
-    super.warn(message, context);
+    if (context === undefined) {
+      super.warn(message);
+    } else {
+      super.warn(message, context);
+    }
     this.writeLine('WARN', message, context);
   }
 
   override debug(message: unknown, context?: string): void {
-    super.debug(message, context);
+    if (context === undefined) {
+      super.debug(message);
+    } else {
+      super.debug(message, context);
+    }
     this.writeLine('DEBUG', message, context);
   }
 
   override verbose(message: unknown, context?: string): void {
-    super.verbose(message, context);
+    if (context === undefined) {
+      super.verbose(message);
+    } else {
+      super.verbose(message, context);
+    }
     this.writeLine('VERBOSE', message, context);
   }
 

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Post, Put, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { AiSettingsConnectionTestService } from './ai-settings-connection-test.service';
 import { AiSettingsService } from './ai-settings.service';
+import { DeleteSavedModelDto } from './dto/delete-saved-model.dto';
 import { TestAiSettingsDto } from './dto/test-ai-settings.dto';
 import { UpdateAiSettingsDto } from './dto/update-ai-settings.dto';
 
@@ -36,6 +37,11 @@ export class AiSettingsController {
   @Delete()
   resetToEnvDefaults() {
     return this.aiSettingsService.resetToEnvDefaults();
+  }
+
+  @Delete('models')
+  removeSavedModel(@Body() dto: DeleteSavedModelDto) {
+    return this.aiSettingsService.removeSavedModel(dto);
   }
 
   private resolveUpdatedBy(request: Request): string | null {

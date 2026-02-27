@@ -9,7 +9,7 @@ import { ROUTES, type DashboardView } from '../../../shared/model/routes'
 import {
   AI_MODELS_BY_PROVIDER_UPDATED_EVENT,
   readPersistedModelsByProvider,
-} from '../../prompt-studio/model/aiProviderSettings.storage'
+} from '../../ai-providers/model/aiProviderSettings.storage'
 
 type DashboardHeroProps = {
   view: DashboardView

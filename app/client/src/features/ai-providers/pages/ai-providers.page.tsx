@@ -1,5 +1,5 @@
 import { Paper, Stack, Text, Title } from '@ui/core'
-import { AiProviderSettingsSection } from '../../prompt-studio/components/AiProviderSettingsSection'
+import { AiProviderSettingsSection } from '../components/AiProviderSettingsSection'
 
 export function AiProvidersPage() {
   return (
