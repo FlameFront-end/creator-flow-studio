@@ -13,10 +13,35 @@ type IdeasListPanelProps = {
   showPendingState?: boolean
 }
 
+const logIdeasListDebug = (message: string, payload?: unknown) => {
+  if (!import.meta.env.DEV) {
+    return
+  }
+  if (payload === undefined) {
+    console.info(`[ideas-debug][list] ${message}`)
+    return
+  }
+  console.info(`[ideas-debug][list] ${message}`, payload)
+}
+
 export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasListPanelProps) => {
   const ideas = controller.ideasQuery.data ?? []
   const hasIdeas = ideas.length > 0
-  const showIdeasSkeletons = !hasIdeas && (controller.isWaitingForIdeas || showPendingState)
+  const latestIdeasLog = useMemo(
+    () => (controller.logsQuery.data ?? []).find((log) => log.operation === 'ideas') ?? null,
+    [controller.logsQuery.data],
+  )
+  const latestIdeasLogError =
+    latestIdeasLog?.status === 'failed'
+      ? getErrorMessage(latestIdeasLog.error, 'Не удалось сгенерировать идеи')
+      : null
+  const ideasGenerationErrorMessage =
+    controller.ideasGenerationError ?? latestIdeasLogError
+  const showIdeasGenerationError = Boolean(ideasGenerationErrorMessage)
+  const showIdeasSkeletons =
+    !hasIdeas &&
+    !showIdeasGenerationError &&
+    (controller.isWaitingForIdeas || showPendingState)
   const showAppendingIdeasSkeletons = hasIdeas && (controller.isWaitingForIdeas || showPendingState)
   const showHeaderHint = hasIdeas || showIdeasSkeletons || showAppendingIdeasSkeletons
   const skeletonIdeasCount = useMemo(() => {
@@ -27,9 +52,40 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
     return Math.min(8, Math.max(1, Math.floor(parsed)))
   }, [controller.count])
   const showClearIdeasButton = Boolean(controller.projectId) && hasIdeas
-  const showIdeasGenerationError =
-    !hasIdeas && !controller.isWaitingForIdeas && Boolean(controller.ideasGenerationError)
   const [transientError, setTransientError] = useState<string | null>(null)
+
+  useEffect(() => {
+    logIdeasListDebug('Render state', {
+      projectId: controller.projectId,
+      hasIdeas,
+      ideasCount: ideas.length,
+      showPendingState,
+      isWaitingForIdeas: controller.isWaitingForIdeas,
+      showIdeasSkeletons,
+      showIdeasGenerationError,
+      ideasGenerationErrorMessage,
+      latestIdeasLog: latestIdeasLog
+        ? {
+            id: latestIdeasLog.id,
+            status: latestIdeasLog.status,
+            createdAt: latestIdeasLog.createdAt,
+            error: latestIdeasLog.error,
+          }
+        : null,
+      logsCount: controller.logsQuery.data?.length ?? 0,
+    })
+  }, [
+    controller.isWaitingForIdeas,
+    controller.logsQuery.data,
+    controller.projectId,
+    hasIdeas,
+    ideas,
+    ideasGenerationErrorMessage,
+    latestIdeasLog,
+    showIdeasGenerationError,
+    showIdeasSkeletons,
+    showPendingState,
+  ])
 
   useEffect(() => {
     if (controller.generateScriptMutation.isError) {
@@ -132,8 +188,8 @@ export const IdeasListPanel = ({ controller, showPendingState = false }: IdeasLi
         </Group>
 
         {showIdeasGenerationError ? (
-          <AppInlineErrorAlert title="Не удалось сгенерировать идеи">
-            {controller.ideasGenerationError}
+          <AppInlineErrorAlert title="Последний запуск генерации завершился с ошибкой">
+            {ideasGenerationErrorMessage}
           </AppInlineErrorAlert>
         ) : null}
 

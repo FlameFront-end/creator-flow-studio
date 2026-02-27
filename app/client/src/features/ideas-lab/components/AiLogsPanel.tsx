@@ -7,6 +7,7 @@ import { AppBadge } from '../../../shared/components/AppBadge'
 import { AppButton } from '../../../shared/components/AppButton'
 import { AppTable } from '../../../shared/components/AppTable'
 import { formatRuDateTime, formatRuNumber } from '../../../shared/lib/formatters'
+import { getErrorMessage } from '../../../shared/lib/httpError'
 import type { IdeasLabController } from '../hooks/useIdeasLabController'
 import { formatOperationLabel, formatStatusLabel, statusColor } from '../lib/ideasLab.formatters'
 
@@ -48,10 +49,14 @@ export const AiLogsPanel = ({ controller }: { controller: IdeasLabController }) 
       return '-'
     }
 
+    const translatedError = getErrorMessage(error, error)
     const expanded = Boolean(expandedErrors[logId])
     const rawExpanded = Boolean(expandedRaw[logId])
-    const isLong = error.length > LOG_ERROR_PREVIEW_LIMIT
-    const value = expanded || !isLong ? error : `${error.slice(0, LOG_ERROR_PREVIEW_LIMIT)}...`
+    const isLong = translatedError.length > LOG_ERROR_PREVIEW_LIMIT
+    const value =
+      expanded || !isLong
+        ? translatedError
+        : `${translatedError.slice(0, LOG_ERROR_PREVIEW_LIMIT)}...`
 
     return (
       <Stack gap={4}>

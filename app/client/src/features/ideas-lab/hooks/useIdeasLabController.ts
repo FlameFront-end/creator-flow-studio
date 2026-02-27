@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ideasApi, type Idea, type IdeaFormat } from '../../../shared/api/services/ideas.api'
 import { personasApi } from '../../../shared/api/services/personas.api'
 import { projectsApi } from '../../../shared/api/services/projects.api'
@@ -37,6 +37,17 @@ const hasActiveIdeaGeneration = (idea: Idea): boolean =>
   isActiveStatus(idea.latestImageStatus) ||
   isActiveStatus(idea.latestVideoStatus)
 
+const logIdeasDebug = (message: string, payload?: unknown) => {
+  if (!import.meta.env.DEV) {
+    return
+  }
+  if (payload === undefined) {
+    console.info(`[ideas-debug][controller] ${message}`)
+    return
+  }
+  console.info(`[ideas-debug][controller] ${message}`, payload)
+}
+
 export const useIdeasLabController = () => {
   const queryClient = useQueryClient()
 
@@ -55,6 +66,7 @@ export const useIdeasLabController = () => {
   const [isWaitingForIdeas, setIsWaitingForIdeas] = useState(false)
   const [ideasGenerationBaselineLogIds, setIdeasGenerationBaselineLogIds] = useState<string[] | null>(null)
   const [ideasGenerationBaselineIdeasCount, setIdeasGenerationBaselineIdeasCount] = useState<number | null>(null)
+  const [ideasGenerationPendingSince, setIdeasGenerationPendingSince] = useState<string | null>(null)
   const [ideasGenerationError, setIdeasGenerationError] = useState<string | null>(null)
   const [generationFieldErrors, setGenerationFieldErrors] = useState<StartIdeasGenerationFieldErrors>({})
 
@@ -120,23 +132,73 @@ export const useIdeasLabController = () => {
     setIsWaitingForIdeas(false)
     setIdeasGenerationBaselineLogIds(null)
     setIdeasGenerationBaselineIdeasCount(null)
+    setIdeasGenerationPendingSince(null)
     setIdeasGenerationError(null)
+    logIdeasDebug('Ideas appeared, stop waiting', {
+      currentIdeasCount,
+      ideasGenerationBaselineIdeasCount,
+    })
   }, [ideasGenerationBaselineIdeasCount, isWaitingForIdeas, ideasQuery.data])
 
   useEffect(() => {
-    if (!isWaitingForIdeas || ideasGenerationBaselineLogIds === null || !logsQuery.data?.length) {
+    if (!isWaitingForIdeas || !logsQuery.data?.length) {
       return
     }
 
-    const baselineLogIds = new Set(ideasGenerationBaselineLogIds)
+    const baselineLogIds = ideasGenerationBaselineLogIds
+      ? new Set(ideasGenerationBaselineLogIds)
+      : null
+    const pendingSinceTimestamp = ideasGenerationPendingSince
+      ? Date.parse(ideasGenerationPendingSince)
+      : null
+    const pendingSinceFloorTimestamp =
+      pendingSinceTimestamp !== null && Number.isFinite(pendingSinceTimestamp)
+        ? pendingSinceTimestamp - 30000
+        : null
     const finalLogForCurrentRequest = logsQuery.data.find((log) => {
       if (log.operation !== 'ideas') {
         return false
       }
-      if (baselineLogIds.has(log.id)) {
+      if (baselineLogIds?.has(log.id)) {
+        return false
+      }
+      if (pendingSinceFloorTimestamp !== null) {
+        const createdAtTimestamp = Date.parse(log.createdAt)
+        if (
+          !Number.isFinite(createdAtTimestamp) ||
+          createdAtTimestamp < pendingSinceFloorTimestamp
+        ) {
+          return false
+        }
+      }
+      if (log.projectId && projectId && log.projectId !== projectId) {
         return false
       }
       return log.status === 'failed' || log.status === 'succeeded'
+    })
+
+    logIdeasDebug('Check ideas final log', {
+      pendingSince: ideasGenerationPendingSince,
+      pendingSinceFloorTimestamp,
+      baselineLogIdsCount: baselineLogIds?.size ?? 0,
+      finalLogForCurrentRequest: finalLogForCurrentRequest
+        ? {
+            id: finalLogForCurrentRequest.id,
+            createdAt: finalLogForCurrentRequest.createdAt,
+            status: finalLogForCurrentRequest.status,
+            error: finalLogForCurrentRequest.error,
+          }
+        : null,
+      latestIdeasLogs: logsQuery.data
+        .filter((log) => log.operation === 'ideas')
+        .slice(0, 3)
+        .map((log) => ({
+          id: log.id,
+          createdAt: log.createdAt,
+          status: log.status,
+          projectId: log.projectId,
+          error: log.error,
+        })),
     })
 
     if (!finalLogForCurrentRequest) {
@@ -146,15 +208,27 @@ export const useIdeasLabController = () => {
     setIsWaitingForIdeas(false)
     setIdeasGenerationBaselineLogIds(null)
     setIdeasGenerationBaselineIdeasCount(null)
+    setIdeasGenerationPendingSince(null)
     if (finalLogForCurrentRequest.status === 'failed') {
-      setIdeasGenerationError(finalLogForCurrentRequest.error || 'Не удалось сгенерировать идеи')
+      setIdeasGenerationError(
+        getErrorMessage(finalLogForCurrentRequest.error, 'Не удалось сгенерировать идеи'),
+      )
+      logIdeasDebug('Final ideas log is FAILED', {
+        logId: finalLogForCurrentRequest.id,
+        error: finalLogForCurrentRequest.error,
+      })
       return
     }
     setIdeasGenerationError(null)
-  }, [ideasGenerationBaselineLogIds, isWaitingForIdeas, logsQuery.data])
+    logIdeasDebug('Final ideas log is SUCCEEDED', {
+      logId: finalLogForCurrentRequest.id,
+    })
+  }, [ideasGenerationBaselineLogIds, ideasGenerationPendingSince, isWaitingForIdeas, logsQuery.data, projectId])
 
   useEffect(() => {
     setIdeasGenerationError(null)
+    setIdeasGenerationPendingSince(null)
+    logIdeasDebug('Project changed, reset ideas generation state', { projectId })
   }, [projectId])
 
   useEffect(() => {
@@ -234,12 +308,21 @@ export const useIdeasLabController = () => {
 
   const generateIdeasMutation = useMutation({
     mutationFn: ideasApi.generateIdeas,
-    onSuccess: invalidateAll,
+    onSuccess: (...args) => {
+      logIdeasDebug('generateIdeasMutation onSuccess', {
+        result: args[0],
+      })
+      return invalidateAll()
+    },
     onError: (error) => {
       setIsWaitingForIdeas(false)
       setIdeasGenerationBaselineLogIds(null)
       setIdeasGenerationBaselineIdeasCount(null)
+      setIdeasGenerationPendingSince(null)
       setIdeasGenerationError(getErrorMessage(error, 'Не удалось сгенерировать идеи'))
+      logIdeasDebug('generateIdeasMutation onError', {
+        error: getErrorMessage(error, 'Не удалось сгенерировать идеи'),
+      })
       showErrorToast(error, 'Не удалось поставить задачу в очередь')
     },
   })
@@ -371,19 +454,65 @@ export const useIdeasLabController = () => {
     })
     if ('fieldErrors' in validated) {
       setGenerationFieldErrors(validated.fieldErrors)
+      logIdeasDebug('Validation failed before startIdeaGeneration', {
+        fieldErrors: validated.fieldErrors,
+        projectId,
+        personaId,
+        topic,
+        count,
+        format,
+      })
       return false
     }
 
+    const nextPendingSince = new Date().toISOString()
     setGenerationFieldErrors({})
     setIdeasGenerationError(null)
+    setIdeasGenerationPendingSince(nextPendingSince)
     generateIdeasMutation.mutate(validated)
     setIdeasGenerationBaselineLogIds(
       (logsQuery.data ?? []).filter((log) => log.operation === 'ideas').map((log) => log.id),
     )
     setIdeasGenerationBaselineIdeasCount(ideasQuery.data?.length ?? 0)
     setIsWaitingForIdeas(true)
+    logIdeasDebug('startIdeaGeneration -> waiting started', {
+      validated,
+      pendingSince: nextPendingSince,
+      baselineLogIds: (logsQuery.data ?? [])
+        .filter((log) => log.operation === 'ideas')
+        .map((log) => log.id),
+      baselineIdeasCount: ideasQuery.data?.length ?? 0,
+    })
     return true
   }
+
+  const restoreIdeasGenerationTracking = useCallback((pendingSince: string | null) => {
+    if (!pendingSince) {
+      logIdeasDebug('restoreIdeasGenerationTracking skipped (no pendingSince)')
+      return
+    }
+    setIsWaitingForIdeas(true)
+    setIdeasGenerationPendingSince(pendingSince)
+    logIdeasDebug('restoreIdeasGenerationTracking applied', { pendingSince })
+  }, [])
+
+  useEffect(() => {
+    logIdeasDebug('State snapshot', {
+      projectId,
+      isWaitingForIdeas,
+      ideasGenerationPendingSince,
+      ideasGenerationError,
+      ideasCount: ideasQuery.data?.length ?? 0,
+      logsCount: logsQuery.data?.length ?? 0,
+    })
+  }, [
+    ideasGenerationError,
+    ideasGenerationPendingSince,
+    isWaitingForIdeas,
+    logsQuery.data,
+    projectId,
+    ideasQuery.data,
+  ])
 
   return {
     projectId,
@@ -419,7 +548,9 @@ export const useIdeasLabController = () => {
     isLogsCollapsed,
     setIsLogsCollapsed,
     isWaitingForIdeas,
+    ideasGenerationPendingSince,
     ideasGenerationError,
+    restoreIdeasGenerationTracking,
     projectsQuery,
     personasQuery,
     ideasQuery,

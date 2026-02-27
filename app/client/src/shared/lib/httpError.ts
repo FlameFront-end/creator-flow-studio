@@ -93,35 +93,143 @@ const EXACT_ERROR_TRANSLATIONS: Record<string, string> = {
     'OpenAI-compatible провайдер вернул некорректный JSON',
 }
 
+const stripErrorCodePrefix = (message: string): string =>
+  message.replace(/^\[[a-z0-9_]+\]\s*/i, '').trim()
+
+const getProviderLabel = (provider: string): string => {
+  const normalizedProvider = provider.trim().toLowerCase()
+  if (normalizedProvider === 'openai-compatible') {
+    return 'локальному AI-серверу'
+  }
+  if (normalizedProvider === 'openai') {
+    return 'OpenAI'
+  }
+  if (normalizedProvider === 'openrouter') {
+    return 'OpenRouter'
+  }
+  return provider
+}
+
+const translateProviderTransportError = (provider: string, reason: string): string => {
+  const normalizedReason = reason.trim().toLowerCase()
+  const providerLabel = getProviderLabel(provider)
+
+  if (
+    normalizedReason.includes('fetch failed') ||
+    normalizedReason.includes('failed to fetch') ||
+    normalizedReason.includes('network error') ||
+    normalizedReason.includes('unknown network error')
+  ) {
+    return `Не удалось подключиться к ${providerLabel}. Проверьте подключение и настройки доступа`
+  }
+
+  if (normalizedReason.includes('econnrefused')) {
+    return `Не удалось подключиться к ${providerLabel} (соединение отклонено). Проверьте, что сервер запущен и адрес указан верно`
+  }
+
+  if (normalizedReason.includes('enotfound') || normalizedReason.includes('getaddrinfo')) {
+    return `Не удалось определить адрес для ${providerLabel}. Проверьте URL и DNS`
+  }
+
+  if (
+    normalizedReason.includes('etimedout') ||
+    normalizedReason.includes('timed out') ||
+    normalizedReason.includes('timeout')
+  ) {
+    return `${providerLabel} слишком долго отвечает. Попробуйте ещё раз`
+  }
+
+  if (normalizedReason.includes('econnreset') || normalizedReason.includes('socket hang up')) {
+    return `Соединение с ${providerLabel} было разорвано. Попробуйте повторить запрос`
+  }
+
+  if (providerLabel === 'локальному AI-серверу') {
+    return 'Не удалось выполнить запрос к локальному AI-серверу. Проверьте Base URL и доступность сервера'
+  }
+
+  return `Не удалось выполнить запрос к ${providerLabel}. Попробуйте ещё раз`
+}
+
 const translateErrorMessage = (message: string): string => {
   const normalized = message.trim()
   if (!normalized) {
     return message
   }
 
-  const exact = EXACT_ERROR_TRANSLATIONS[normalized]
+  const normalizedWithoutCodePrefix = stripErrorCodePrefix(normalized)
+  const lookupMessage = normalizedWithoutCodePrefix || normalized
+
+  const exact = EXACT_ERROR_TRANSLATIONS[lookupMessage]
   if (exact) {
     return exact
   }
 
-  const aiRateLimitMatch = normalized.match(
+  const aiRateLimitMatch = lookupMessage.match(
     /^Too many AI connection test requests\. Try again in (\d+) seconds\.$/i,
   )
   if (aiRateLimitMatch) {
     return `Слишком много проверок подключения. Повторите через ${aiRateLimitMatch[1]} сек.`
   }
 
-  if (/timed out after \d+ms/i.test(normalized)) {
+  if (/timed out after \d+ms/i.test(lookupMessage)) {
     return 'Модель долго не отвечает. Попробуйте ещё раз через несколько секунд'
   }
 
-  const shouldNotExistMatch = normalized.match(/^property (.+) should not exist$/i)
+  const providerFailedBeforeResponseMatch = lookupMessage.match(
+    /^(OpenAI-compatible|OpenAI|OpenRouter) request failed before response: (.+)$/i,
+  )
+  if (providerFailedBeforeResponseMatch) {
+    return translateProviderTransportError(
+      providerFailedBeforeResponseMatch[1],
+      providerFailedBeforeResponseMatch[2],
+    )
+  }
+
+  const providerFailedWithStatusMatch = lookupMessage.match(
+    /^(OpenAI-compatible|OpenAI|OpenRouter) request failed \((\d{3})\s+(.+)\)$/i,
+  )
+  if (providerFailedWithStatusMatch) {
+    const providerLabel = getProviderLabel(providerFailedWithStatusMatch[1])
+    return `Запрос к ${providerLabel} завершился ошибкой HTTP ${providerFailedWithStatusMatch[2]}`
+  }
+
+  const providerFailedGenericMatch = lookupMessage.match(
+    /^(OpenAI-compatible|OpenAI|OpenRouter) request failed$/i,
+  )
+  if (providerFailedGenericMatch) {
+    const providerLabel = getProviderLabel(providerFailedGenericMatch[1])
+    return `Не удалось выполнить запрос к ${providerLabel}`
+  }
+
+  if (
+    /^fetch failed$/i.test(lookupMessage) ||
+    /^failed to fetch$/i.test(lookupMessage) ||
+    /^network error$/i.test(lookupMessage)
+  ) {
+    return 'Сетевой запрос не выполнен. Проверьте подключение и доступность сервера'
+  }
+
+  if (/econnrefused/i.test(lookupMessage)) {
+    return 'Сервер недоступен (соединение отклонено). Проверьте адрес и запущен ли сервис'
+  }
+
+  if (/enotfound|getaddrinfo/i.test(lookupMessage)) {
+    return 'Не удалось найти адрес сервера. Проверьте URL'
+  }
+
+  if (/etimedout|timed out|timeout/i.test(lookupMessage)) {
+    return 'Сервер слишком долго отвечает. Попробуйте ещё раз'
+  }
+
+  const shouldNotExistMatch = lookupMessage.match(/^property (.+) should not exist$/i)
   if (shouldNotExistMatch) {
     const fieldName = shouldNotExistMatch[1]
     return `Поле "${fieldName}" не должно передаваться в этом запросе`
   }
 
-  const quotedNotFoundMatch = normalized.match(/^(Script|Caption|Asset|Prompt template) "(.+)" not found$/i)
+  const quotedNotFoundMatch = lookupMessage.match(
+    /^(Script|Caption|Asset|Prompt template) "(.+)" not found$/i,
+  )
   if (quotedNotFoundMatch) {
     const kind = quotedNotFoundMatch[1].toLowerCase()
     const id = quotedNotFoundMatch[2]
@@ -131,12 +239,12 @@ const translateErrorMessage = (message: string): string => {
     return `Шаблон "${id}" не найден`
   }
 
-  const unavailableModelMatch = normalized.match(/^Requested model "(.+)" is unavailable\.$/i)
+  const unavailableModelMatch = lookupMessage.match(/^Requested model "(.+)" is unavailable\.$/i)
   if (unavailableModelMatch) {
     return `Запрошенная модель "${unavailableModelMatch[1]}" недоступна`
   }
 
-  if (/environment variable is required$/i.test(normalized)) {
+  if (/environment variable is required$/i.test(lookupMessage)) {
     return 'Отсутствует обязательная переменная окружения'
   }
 
@@ -167,6 +275,10 @@ export const getErrorMessage = (error: unknown, fallback: string): string => {
       toMessage(error.message) ??
       fallback
     return translateErrorMessage(message)
+  }
+
+  if (typeof error === 'string' && error.trim().length > 0) {
+    return translateErrorMessage(error)
   }
 
   if (error instanceof Error && error.message.trim().length > 0) {

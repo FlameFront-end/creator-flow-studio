@@ -40,6 +40,17 @@ const workspaceSteps: {
   },
 ]
 
+const logIdeasPageDebug = (message: string, payload?: unknown) => {
+  if (!import.meta.env.DEV) {
+    return
+  }
+  if (payload === undefined) {
+    console.info(`[ideas-debug][page] ${message}`)
+    return
+  }
+  console.info(`[ideas-debug][page] ${message}`, payload)
+}
+
 export function IdeasLabPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -52,14 +63,22 @@ export function IdeasLabPage() {
   const ideasCount = controller.ideasQuery.data?.length ?? 0
   const logsCount = controller.logsQuery.data?.length ?? 0
   const isPendingIdeasNavigation = searchParams.get('pendingIdeas') === '1'
+  const pendingIdeasSince = searchParams.get('pendingIdeasSince')
 
   const buildWorkspaceRoute = useCallback(
-    (nextWorkspace: IdeasLabWorkspaceRoute, options?: { pendingIdeas?: boolean }) => {
+    (
+      nextWorkspace: IdeasLabWorkspaceRoute,
+      options?: { pendingIdeas?: boolean; pendingIdeasSince?: string },
+    ) => {
       const nextSearch = new URLSearchParams(searchParams)
       if (options?.pendingIdeas) {
         nextSearch.set('pendingIdeas', '1')
+        if (options.pendingIdeasSince) {
+          nextSearch.set('pendingIdeasSince', options.pendingIdeasSince)
+        }
       } else {
         nextSearch.delete('pendingIdeas')
+        nextSearch.delete('pendingIdeasSince')
       }
       const query = nextSearch.toString()
       const base = buildIdeasLabRoute(nextWorkspace)
@@ -75,18 +94,43 @@ export function IdeasLabPage() {
   }, [workspaceParam, navigate])
 
   useEffect(() => {
-    if (workspace !== 'ideas' || !isPendingIdeasNavigation || ideasCount === 0) {
+    if (workspace !== 'ideas' || !isPendingIdeasNavigation) {
       return
     }
-    navigate(buildWorkspaceRoute('ideas'), { replace: true })
-  }, [buildWorkspaceRoute, ideasCount, isPendingIdeasNavigation, navigate, workspace])
+    if (ideasCount > 0 || controller.ideasGenerationError) {
+      logIdeasPageDebug('Clear pendingIdeas params after result', {
+        ideasCount,
+        ideasGenerationError: controller.ideasGenerationError,
+      })
+      navigate(buildWorkspaceRoute('ideas'), { replace: true })
+    }
+  }, [
+    buildWorkspaceRoute,
+    controller.ideasGenerationError,
+    ideasCount,
+    isPendingIdeasNavigation,
+    navigate,
+    workspace,
+  ])
 
   useEffect(() => {
-    if (!isPendingIdeasNavigation || controller.isWaitingForIdeas) {
+    if (workspace !== 'ideas' || !isPendingIdeasNavigation || ideasCount > 0) {
       return
     }
-    navigate(buildWorkspaceRoute(workspace), { replace: true })
-  }, [buildWorkspaceRoute, controller.isWaitingForIdeas, isPendingIdeasNavigation, navigate, workspace])
+    logIdeasPageDebug('Restore tracking on ideas page', {
+      workspace,
+      isPendingIdeasNavigation,
+      ideasCount,
+      pendingIdeasSince,
+    })
+    controller.restoreIdeasGenerationTracking(pendingIdeasSince)
+  }, [
+    controller.restoreIdeasGenerationTracking,
+    ideasCount,
+    isPendingIdeasNavigation,
+    pendingIdeasSince,
+    workspace,
+  ])
 
   const workspaceHint = useMemo(() => {
     if (workspace === 'brief') {
@@ -162,7 +206,20 @@ export function IdeasLabPage() {
             <IdeasGenerationPanel
               controller={controller}
               onGenerationAccepted={() =>
-                navigate(buildWorkspaceRoute('ideas', { pendingIdeas: true }))
+                (() => {
+                  const nextPendingSince =
+                    controller.ideasGenerationPendingSince ?? new Date().toISOString()
+                  logIdeasPageDebug('Navigate to ideas after generation accepted', {
+                    nextPendingSince,
+                    workspace,
+                  })
+                  navigate(
+                    buildWorkspaceRoute('ideas', {
+                      pendingIdeas: true,
+                      pendingIdeasSince: nextPendingSince,
+                    }),
+                  )
+                })()
               }
             />
             {ideasCount > 0 ? (
@@ -180,7 +237,7 @@ export function IdeasLabPage() {
             <Grid.Col span={{ base: 12, xl: 5 }}>
               <IdeasListPanel
                 controller={controller}
-                showPendingState={isPendingIdeasNavigation && controller.isWaitingForIdeas && ideasCount === 0}
+                showPendingState={isPendingIdeasNavigation && ideasCount === 0}
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, xl: 7 }}>
